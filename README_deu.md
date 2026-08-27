@@ -70,6 +70,8 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── collector/        # Orchestriert Ingest+Flush, wiederholt bei Sink-Fehler
 │   ├── sink/              # Wohin geflushte Batches gehen (heute ConsoleSink)
 │   └── api/                # Einfache JSON/HTTP-Handler, die den Collector umschließen
+├── docs/
+│   └── API.md              # Echte HTTP-Endpunktreferenz (Requests, Responses, Statuscodes)
 ├── build/                # Kompilierte Binärdateien (von git ignoriert)
 ├── bump_version.py        # Versionserhöhung im "Kilometerzähler"-Stil (vom Build ausgeführt)
 ├── build.sh / build.bat   # Echter Build: Bump + go build
@@ -78,10 +80,11 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 ```
 
 Aus der ursprünglichen Vorlage entfernt: `hardware/`, `firmware/`, `os/`,
-`docs/`, `images/` und `scripts/` — dies ist ein reiner Softwaredienst
+`images/` und `scripts/` — dies ist ein reiner Softwaredienst
 (Go-Binärdatei) ohne eigene Hardware oder Firmware, ohne zu pflegendes
-Betriebssystem-Image, und ohne Dokumentations-/Medien-/Utility-Skript-
-Inhalt, der eigene Ordner bislang rechtfertigen würde.
+Betriebssystem-Image, und ohne Medien-/Utility-Skript-Inhalt, der eigene
+Ordner bislang rechtfertigen würde. Siehe [`docs/API.md`](docs/API.md)
+für die vollständige HTTP-Endpunktreferenz.
 
 ---
 

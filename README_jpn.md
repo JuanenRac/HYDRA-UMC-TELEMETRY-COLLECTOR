@@ -76,6 +76,8 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── collector/        # 取り込み+フラッシュを調整、シンク失敗時に再試行
 │   ├── sink/              # フラッシュされたバッチの行き先(現在は ConsoleSink)
 │   └── api/                # collector を包む単純な JSON/HTTP ハンドラー
+├── docs/
+│   └── API.md              # 本物の HTTP エンドポイントリファレンス（リクエスト、レスポンス、ステータスコード）
 ├── build/                # コンパイル済みバイナリ（gitignore 対象）
 ├── bump_version.py        # オドメーター式バージョンインクリメント（ビルドが実行）
 ├── build.sh / build.bat   # 実際のビルド：バージョンインクリメント + go build
@@ -83,12 +85,12 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 └── README.md
 ```
 
-元のテンプレートから省略：`hardware/`、`firmware/`、`os/`、`docs/`、
+元のテンプレートから省略：`hardware/`、`firmware/`、`os/`、
 `images/`、`scripts/` —— これは純粋なソフトウェアサービス(Go バイナリ)
 であり、専用のハードウェアやファームウェア、維持すべき
-オペレーティングシステムイメージもなく、専用フォルダを正当化する
-ほどのドキュメント/メディア/ユーティリティスクリプトの内容もまだ
-ありません。
+オペレーティングシステムイメージもなく、専用フォルダを正当化するほどの
+メディア/ユーティリティスクリプトの内容もまだありません。完全な HTTP
+エンドポイントリファレンスは [`docs/API.md`](docs/API.md) を参照。
 
 ---
 

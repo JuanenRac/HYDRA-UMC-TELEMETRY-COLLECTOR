@@ -20,6 +20,18 @@ semantic-versioning judgment calls:
 
 ---
 
+## Documentation - Real HTTP API reference
+
+- **`docs/API.md`** (new) - every real endpoint (`POST /ingest/can`,
+  `POST /ingest/ws`, `GET /stats`) documented from the actual handler
+  code in `api.go`, the exact 8-byte CAN frame encoding in `telemetry/can.go`
+  (signal type byte + little-endian float32), and every `Stats` field's
+  meaning in `collector.go` - including the exact `buffer: full` error
+  text for the real `503` backpressure case. Documentation-only - no
+  code changed, no version bump.
+
+---
+
 ## [0.0.5] - Real HYDRA-UMC-DATALAKE sink
 
 - **`src/sink/datalake.go`** - `DatalakeSink`, a real `Sink` implementation

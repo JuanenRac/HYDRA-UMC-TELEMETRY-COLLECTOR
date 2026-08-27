@@ -70,6 +70,8 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── collector/        # Orquesta ingesta+flush, reintenta si falla el sink
 │   ├── sink/              # A donde van los lotes vaciados (ConsoleSink hoy)
 │   └── api/                # Handlers JSON/HTTP planos que envuelven el collector
+├── docs/
+│   └── API.md              # Referencia real de endpoints HTTP (peticiones, respuestas, codigos de estado)
 ├── build/                # Binarios compilados (ignorado por git)
 ├── bump_version.py        # Incremento de versión tipo cuentakilómetros (lo ejecuta el build)
 ├── build.sh / build.bat   # Build real: bump + go build
@@ -77,11 +79,12 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 └── README.md
 ```
 
-Podado de la plantilla original: `hardware/`, `firmware/`, `os/`, `docs/`,
+Podado de la plantilla original: `hardware/`, `firmware/`, `os/`,
 `images/` y `scripts/` — es un servicio de software puro (binario Go) sin
 hardware ni firmware propios, sin imagen de sistema operativo que
-mantener, y sin contenido de documentación/medios/scripts de utilidad
-todavía suficiente para justificar sus propias carpetas.
+mantener, y sin contenido de medios/scripts de utilidad todavía suficiente
+para justificar sus propias carpetas. Ver [`docs/API.md`](docs/API.md)
+para la referencia completa de endpoints HTTP.
 
 ---
 
