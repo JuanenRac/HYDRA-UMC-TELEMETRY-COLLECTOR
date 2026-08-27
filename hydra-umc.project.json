@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "ecosystem": "HYDRA-UMC",
+  "name": "HYDRA-UMC-TELEMETRY-COLLECTOR",
+  "version": "0.0.5",
+  "role": "api",
+  "stack": "go",
+  "technologies": [
+    "Go",
+    "CAN/WebSocket parsers",
+    "bounded FIFO buffer",
+    "HTTP API"
+  ],
+  "deployment_target": "cm5",
+  "maturity": "functional",
+  "family": "Data & Analytics",
+  "parent": "HYDRA-UMC-DATALAKE",
+  "build": "Go module root is src/. Run go build ./... from inside src/.",
+  "notes": "Real CAN/WebSocket ingestion pipeline with a bounded buffer, retry-on-outage delivery, and a real DatalakeSink writing to HYDRA-UMC-DATALAKE - verified end-to-end.",
+  "native_version": {
+    "file": "src/version.go",
+    "pattern": "Version\\s*=\\s*\"(\\d+)\\.(\\d+)\\.(\\d+)\""
+  }
+}

@@ -1,0 +1,7 @@
+build/
+*.exe
+*.test
+# HYDRA-UMC shared secret protection
+.env
+.env.*
+!.env.example
