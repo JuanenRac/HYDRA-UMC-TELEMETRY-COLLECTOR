@@ -17,6 +17,13 @@ type Sample struct {
 	Kind      string             `json:"kind"`      // e.g. "motor_current", "motor_temp"
 	Timestamp int64              `json:"timestamp"` // unix milliseconds
 	Fields    map[string]float64 `json:"fields"`     // open key/value, same convention as hydra.common.v1's HealthReport.metrics
+	// Sequence is an optional, per-producer monotonic counter a real
+	// device can attach so a reconnect that resends its last few
+	// unacked messages doesn't silently inflate ingest counts (see
+	// dedup.Tracker). Zero means "not provided" - a producer that
+	// doesn't send Sequence gets today's un-deduplicated behavior,
+	// unchanged, rather than being forced to opt in.
+	Sequence uint64 `json:"sequence,omitempty"`
 }
 
 // Validate reports the first reason a Sample is not fit to buffer - kept

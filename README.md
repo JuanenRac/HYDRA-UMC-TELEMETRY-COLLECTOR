@@ -27,6 +27,8 @@ It performs real-time parsing and normalization of heterogeneous data sources, e
 * ⚡ **High Throughput:** Optimized for thousands of messages per millisecond with minimal CPU overhead.
 * 🧬 **Data Normalization:** Translates raw binary packets into standardized JSON/Protobuf formats.
 * 🛡️ **Buffered Delivery:** Ensures zero data loss during temporary database outages or network spikes.
+* 🔁 **Reconnect-Safe Deduplication:** An optional per-producer sequence number, tracked in a bounded reorder window, so a device that reconnects and resends its last few unacked messages never inflates ingest counts. *(implemented)*
+* 🩺 **Real Failure Diagnosis:** Every flush failure is classified as the sink genuinely rejecting the data vs. a transport problem - exposed in `GET /stats` for real operational visibility. *(implemented)*
 
 ---
 
@@ -52,6 +54,8 @@ flowchart LR
 * **Why the CAN wire format is this project's own v0 convention, not the ecosystem's real CAN IDs yet.** The real CAN ID tables live in HYDRA-UMC's and URTC's own firmware docs - integrating against them for real is future work (see `mejoras_futuras.txt`), not something to guess at without that reference open.
 * **Why `DatalakeSink` writes one sample per HTTP request, and why a partial batch failure can duplicate rows on retry.** HYDRA-UMC-DATALAKE's own `POST /ingest` (see that project's `src/hydra_umc_datalake/api.py`) is single-sample, not batch - a "batch write" here really is N real requests. If one fails partway through a batch, `Write` returns an error and `collector.go`'s own retry logic requeues the WHOLE batch, so already-written samples get re-sent and land as duplicate rows in DATALAKE on the next successful flush. At-least-once with occasional duplicates on a real outage - not silently dropping data (at-most-once) - is this v0's honest trade-off; real exactly-once delivery (idempotency keys, upserts) is future work, see `mejoras_futuras.txt`. `ConsoleSink` (print to stdout) is still the default when `-datalake-url` isn't given, for running this collector standalone.
 * **How this fits the rest of the ecosystem.** A sibling service under HYDRA-UMC-DATALAKE - the one component that actually reaches out to HYDRA-UMC-SERVER for per-robot telemetry and writes it into the shared time-series store.
+* **Why deduplication is a separate `dedup` package, keyed on an optional `Sequence`, not a hash of the sample's own content.** A real reconnect resends the identical bytes, so content-hashing would work for that case - but it would also silently swallow two genuinely different samples that happen to share every field (e.g. two `0.0` readings a second apart). A per-producer sequence number is what a real device already has to track its own unacked messages, so reusing it is the honest, real signal - not a guess derived from data that doesn't actually promise uniqueness. `Sequence == 0`/omitted opts a producer out entirely, so nothing about pre-existing behavior changed for a device that doesn't send one.
+* **Why `sink.InvalidDataError` doesn't change the retry policy, only makes it diagnosable.** `collector.go`'s all-or-nothing requeue-and-retry (see above) stays exactly as it was - a permanently-invalid sample still gets retried like anything else, which is itself a known, documented limitation (see `mejoras_futuras.txt`). What's new is real visibility: `GET /stats`'s `invalidDataErrors` vs. `transportErrors` lets an operator tell "DATALAKE is rejecting our data" apart from "the network to DATALAKE is down" without guessing from logs.
 
 ---
 
@@ -67,8 +71,9 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── main.go         # Entry point: wires everything, starts the HTTP API
 │   ├── telemetry/      # Sample type + CAN/WebSocket parsers (normalization)
 │   ├── buffer/         # Bounded, backpressure-reporting FIFO (Ring)
-│   ├── collector/      # Orchestrates ingest+flush, retries on sink failure
-│   ├── sink/           # Where flushed batches go (ConsoleSink today)
+│   ├── dedup/           # Real per-producer sequence deduplication (reorder window)
+│   ├── collector/      # Orchestrates ingest+flush, retries on sink failure, dedup
+│   ├── sink/           # Where flushed batches go (ConsoleSink today), transport/invalid-data classification
 │   └── api/             # Plain JSON/HTTP handlers wrapping the collector
 ├── docs/
 │   └── API.md           # Real HTTP endpoint reference (requests, responses, status codes)

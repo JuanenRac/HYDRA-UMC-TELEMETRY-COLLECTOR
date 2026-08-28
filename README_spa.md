@@ -27,6 +27,8 @@ Realiza el parseo y la normalización en tiempo real de fuentes de datos heterog
 * ⚡ **Alto Rendimiento:** Optimizado para miles de mensajes por milisegundo con un overhead de CPU mínimo.
 * 🧬 **Normalización de Datos:** Traduce paquetes binarios brutos a formatos estandarizados JSON/Protobuf.
 * 🛡️ **Entrega Bufferizada:** Asegura la pérdida de datos cero durante fallos temporales de base de datos o picos de red.
+* 🔁 **Deduplicación Segura ante Reconexión:** Un número de secuencia opcional por productor, rastreado en una ventana de reordenamiento acotada, para que un dispositivo que se reconecta y reenvía sus últimos mensajes sin confirmar nunca infle los conteos de ingesta. *(implementado)*
+* 🩺 **Diagnóstico Real de Fallos:** Cada fallo de flush se clasifica como un rechazo genuino de los datos por parte del sink frente a un problema de transporte - expuesto en `GET /stats` para una visibilidad operativa real. *(implementado)*
 
 ---
 
@@ -52,6 +54,8 @@ flowchart LR
 * **Por qué el formato de trama CAN es una convención propia v0 de este proyecto, no todavía los IDs CAN reales del ecosistema.** Las tablas reales de IDs CAN viven en la propia documentación de firmware de HYDRA-UMC y URTC - integrarse contra ellas de verdad es trabajo futuro (ver `mejoras_futuras.txt`), no algo para adivinar sin esa referencia delante.
 * **Por qué `DatalakeSink` escribe una muestra por petición HTTP, y por qué un fallo parcial de lote puede duplicar filas al reintentar.** El propio `POST /ingest` de HYDRA-UMC-DATALAKE (ver `src/hydra_umc_datalake/api.py` de ese proyecto) es de una sola muestra, no por lotes - una "escritura por lotes" aquí en realidad son N peticiones reales. Si una falla a mitad de un lote, `Write` devuelve un error y la propia lógica de reintento de `collector.go` reencola el lote COMPLETO, así que las muestras ya escritas se reenvían y terminan como filas duplicadas en DATALAKE en el siguiente flush exitoso. Al-menos-una-vez con duplicados ocasionales ante un corte real - en vez de perder datos en silencio (a-lo-sumo-una-vez) - es el compromiso honesto de esta v0; la entrega real exactamente-una-vez (claves de idempotencia, upserts) es trabajo futuro, ver `mejoras_futuras.txt`. `ConsoleSink` (imprime a stdout) sigue siendo el valor por defecto cuando no se pasa `-datalake-url`, para ejecutar este collector de forma independiente.
 * **Cómo encaja en el resto del ecosistema.** Un servicio hermano bajo HYDRA-UMC-DATALAKE - el componente que realmente contacta con HYDRA-UMC-SERVER para obtener telemetría por robot y la escribe en el almacén de series temporales compartido.
+* **Por qué la deduplicación es un paquete `dedup` separado, indexado por un `Sequence` opcional, no un hash del propio contenido de la muestra.** Una reconexión real reenvía los mismos bytes exactos, así que el hash de contenido funcionaría para ese caso - pero también se tragaría en silencio dos muestras genuinamente distintas que por casualidad comparten todos los campos (p. ej. dos lecturas de `0.0` con un segundo de diferencia). Un número de secuencia por productor es lo que un dispositivo real ya tiene que llevar para rastrear sus propios mensajes sin confirmar, así que reutilizarlo es la señal honesta y real - no una suposición derivada de datos que en realidad no prometen unicidad. `Sequence == 0`/omitido excluye por completo a un productor, así que nada del comportamiento preexistente cambia para un dispositivo que no envía uno.
+* **Por qué `sink.InvalidDataError` no cambia la política de reintentos, solo la hace diagnosticable.** El reencolado-y-reintento todo-o-nada de `collector.go` (ver arriba) se mantiene exactamente igual - una muestra permanentemente inválida se sigue reintentando como cualquier otra, lo cual es en sí mismo una limitación conocida y documentada (ver `mejoras_futuras.txt`). Lo nuevo es visibilidad real: `invalidDataErrors` frente a `transportErrors` en `GET /stats` le permite a un operador distinguir "DATALAKE está rechazando nuestros datos" de "la red hacia DATALAKE está caída" sin tener que adivinar a partir de los logs.
 
 ---
 
@@ -67,8 +71,9 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── main.go           # Punto de entrada: conecta todo, arranca la API HTTP
 │   ├── telemetry/        # Tipo Sample + parsers CAN/WebSocket (normalizacion)
 │   ├── buffer/           # FIFO acotado con reporte de contrapresion (Ring)
-│   ├── collector/        # Orquesta ingesta+flush, reintenta si falla el sink
-│   ├── sink/              # A donde van los lotes vaciados (ConsoleSink hoy)
+│   ├── dedup/            # Deduplicación real por secuencia por productor (ventana de reordenamiento)
+│   ├── collector/        # Orquesta ingesta+flush, reintenta si falla el sink, dedup
+│   ├── sink/              # A donde van los lotes vaciados (ConsoleSink hoy), clasificación transporte/datos inválidos
 │   └── api/                # Handlers JSON/HTTP planos que envuelven el collector
 ├── docs/
 │   └── API.md              # Referencia real de endpoints HTTP (peticiones, respuestas, codigos de estado)

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "ecosystem": "HYDRA-UMC",
   "name": "HYDRA-UMC-TELEMETRY-COLLECTOR",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "role": "api",
   "stack": "go",
   "technologies": [
@@ -12,11 +12,11 @@
     "HTTP API"
   ],
   "deployment_target": "cm5",
-  "maturity": "functional",
+  "maturity": "established",
   "family": "Data & Analytics",
   "parent": "HYDRA-UMC-DATALAKE",
   "build": "Go module root is src/. Run go build ./... from inside src/.",
-  "notes": "Real CAN/WebSocket ingestion pipeline with a bounded buffer, retry-on-outage delivery, and a real DatalakeSink writing to HYDRA-UMC-DATALAKE - verified end-to-end.",
+  "notes": "Real CAN/WebSocket ingestion pipeline with a bounded buffer, retry-on-outage delivery, and a real DatalakeSink writing to HYDRA-UMC-DATALAKE - verified end-to-end. Real per-producer sequence deduplication with a bounded reorder window (dedup.Tracker) so a reconnect resend never inflates ingest counts, and a real transport-vs-invalid-data error classification on flush failures (sink.InvalidDataError) for real operational diagnosis.",
   "native_version": {
     "file": "src/version.go",
     "pattern": "Version\\s*=\\s*\"(\\d+)\\.(\\d+)\\.(\\d+)\""

@@ -75,6 +75,52 @@ func TestDatalakeSink_ReturnsErrorOnNon202(t *testing.T) {
 	}
 }
 
+func TestDatalakeSink_Classifies400AsInvalidData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("schema validation failed"))
+	}))
+	defer server.Close()
+
+	sink := NewDatalakeSink(server.URL)
+	err := sink.Write([]telemetry.Sample{
+		{SourceID: "robot-1", Kind: "motor_temp", Timestamp: 1000, Fields: map[string]float64{"value": 1}},
+	})
+	if !IsInvalidData(err) {
+		t.Fatalf("err = %v, want a real InvalidDataError for a 400 response", err)
+	}
+}
+
+func TestDatalakeSink_ClassifiesA5xxAsNotInvalidData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	sink := NewDatalakeSink(server.URL)
+	err := sink.Write([]telemetry.Sample{
+		{SourceID: "robot-1", Kind: "motor_temp", Timestamp: 1000, Fields: map[string]float64{"value": 1}},
+	})
+	if IsInvalidData(err) {
+		t.Fatalf("err = %v, a real 500 must NOT be classified as invalid data - it's a transport-level problem", err)
+	}
+}
+
+func TestDatalakeSink_ClassifiesAConnectionFailureAsNotInvalidData(t *testing.T) {
+	// Port 1 is real but nothing real listens there - a genuine
+	// connection failure, the clearest possible transport error.
+	sink := NewDatalakeSink("http://127.0.0.1:1")
+	err := sink.Write([]telemetry.Sample{
+		{SourceID: "robot-1", Kind: "motor_temp", Timestamp: 1000, Fields: map[string]float64{"value": 1}},
+	})
+	if err == nil {
+		t.Fatal("expected a real connection error, got nil")
+	}
+	if IsInvalidData(err) {
+		t.Fatalf("err = %v, a connection failure must NOT be classified as invalid data", err)
+	}
+}
+
 func TestDatalakeSink_StopsAtFirstFailureInABatch(t *testing.T) {
 	var mu sync.Mutex
 	callCount := 0

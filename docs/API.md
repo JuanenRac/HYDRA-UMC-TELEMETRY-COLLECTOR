@@ -55,9 +55,21 @@ Ingests one telemetry sample already in this collector's own `Sample` JSON shape
 }
 ```
 
-`sourceId` and `kind` are required (non-empty) - see `Sample.Validate()` in [`telemetry/sample.go`](../src/telemetry/sample.go). `timestamp` is Unix epoch milliseconds.
+`sourceId` and `kind` are required (non-empty) - see `Sample.Validate()` in [`telemetry/sample.go`](../src/telemetry/sample.go). `timestamp` is Unix epoch milliseconds. `sequence` (uint64, optional) is a real per-producer monotonic counter - see "Deduplication" below.
 
-**Responses** - same shape as `/ingest/can` above: `202` on success, `400` for malformed JSON or a failed `Validate()`, `503` if the buffer is full.
+**Responses** - same shape as `/ingest/can` above (`202` on success, `400` for malformed JSON or a failed `Validate()`, `503` if the buffer is full), plus:
+
+| Status | Body | Meaning |
+|---|---|---|
+| 200 | `{"status": "duplicate"}` | This exact `(sourceId, sequence)` pair was already ingested - a real reconnect resending an unacked message, treated as an idempotent no-op, not an error. Only possible when `sequence` is provided and non-zero. |
+
+---
+
+## Deduplication (real reconnect/resend handling)
+
+A producer may attach an optional `sequence` (uint64) to each sample - a per-source monotonic counter. `sequence: 0` (or the field omitted) means "not provided": that sample is never deduplicated, matching this collector's original behavior exactly.
+
+When `sequence` is provided, [`dedup.Tracker`](../src/dedup/dedup.go) remembers, per `sourceId`, the most recent sequence numbers within a bounded reorder window (256). A sequence already seen for that source - or one far enough behind the highest one accepted to be a stale replay rather than legitimate reordering - is rejected as a duplicate (`200 {"status": "duplicate"}`, counted in `GET /stats`'s `duplicates`, never re-buffered). This is the real mechanism behind "a device that reconnects and resends its last few unacked messages doesn't inflate ingest counts."
 
 ---
 
@@ -69,8 +81,11 @@ Ingests one telemetry sample already in this collector's own `Sample` JSON shape
 {
   "ingested": 1042,
   "ingestErrors": 3,
+  "duplicates": 5,
   "flushed": 980,
   "flushErrors": 1,
+  "invalidDataErrors": 0,
+  "transportErrors": 1,
   "dropped": 0,
   "bufferLen": 62,
   "bufferCap": 4096
@@ -79,8 +94,11 @@ Ingests one telemetry sample already in this collector's own `Sample` JSON shape
 
 - `ingested` - samples successfully parsed and buffered.
 - `ingestErrors` - `/ingest/can` or `/ingest/ws` calls rejected (bad frame/JSON).
+- `duplicates` - samples rejected as an already-seen `(sourceId, sequence)` pair - see "Deduplication" above.
 - `flushed` - samples successfully written to the sink.
 - `flushErrors` - failed sink writes (the whole batch is requeued, not lost - see `collector.go`'s own doc comment on `FlushOnce`).
+- `invalidDataErrors` - of those `flushErrors`, how many were the sink (e.g. HYDRA-UMC-DATALAKE) genuinely rejecting the data's content (a real HTTP 400) - retrying the identical bytes will not help; see `sink.InvalidDataError`.
+- `transportErrors` - of those `flushErrors`, how many were a transport-level problem (network error, timeout, 5xx) - a retry might genuinely succeed. Every `flushErrors` is counted as exactly one of `invalidDataErrors` or `transportErrors`.
 - `dropped` - samples actually lost because a requeue after a flush failure outran the buffer's capacity.
 - `bufferLen` / `bufferCap` - current vs. maximum ring buffer occupancy.
 

@@ -27,6 +27,8 @@ Il effectue l'analyse et la normalisation en temps réel de sources de données 
 * ⚡ **Haut débit :** Optimisé pour des milliers de messages par milliseconde avec un surdébit CPU minimal.
 * 🧬 **Normalisation des données :** Traduit les paquets binaires bruts en formats JSON/Protobuf standardisés.
 * 🛡️ **Livraison mise en mémoire tampon :** Garantit zéro perte de données pendant les pannes temporaires de base de données ou les pics de réseau.
+* 🔁 **Déduplication sûre en cas de reconnexion :** Un numéro de séquence optionnel par producteur, suivi dans une fenêtre de réordonnancement bornée, pour qu'un appareil qui se reconnecte et renvoie ses derniers messages non acquittés ne gonfle jamais les comptes d'ingestion. *(implémenté)*
+* 🩺 **Diagnostic réel des échecs :** Chaque échec de vidage est classé comme un rejet réel des données par le sink par rapport à un problème de transport - exposé dans `GET /stats` pour une visibilité opérationnelle réelle. *(implémenté)*
 
 ---
 
@@ -52,6 +54,8 @@ flowchart LR
 * **Pourquoi le format de trame CAN est une convention propre v0 de ce projet, pas encore les vrais ID CAN de l'écosystème.** Les vraies tables d'ID CAN vivent dans la propre documentation firmware de HYDRA-UMC et d'URTC - s'y intégrer réellement est un travail futur (voir `mejoras_futuras.txt`), pas quelque chose à deviner sans cette référence sous les yeux.
 * **Pourquoi `DatalakeSink` écrit un échantillon par requête HTTP, et pourquoi un échec partiel de lot peut dupliquer des lignes lors d'une nouvelle tentative.** Le propre `POST /ingest` de HYDRA-UMC-DATALAKE (voir `src/hydra_umc_datalake/api.py` de ce projet) est mono-échantillon, pas par lot - une « écriture par lot » ici correspond en réalité à N vraies requêtes. Si l'une échoue en cours de lot, `Write` renvoie une erreur et la propre logique de nouvelle tentative de `collector.go` remet TOUT le lot en file d'attente, donc les échantillons déjà écrits sont renvoyés et finissent en lignes dupliquées dans DATALAKE au prochain flush réussi. Au moins une fois avec des doublons occasionnels lors d'une vraie panne - plutôt que de perdre silencieusement des données (au plus une fois) - c'est le compromis honnête de cette v0 ; une vraie livraison exactement une fois (clés d'idempotence, upserts) est un travail futur, voir `mejoras_futuras.txt`. `ConsoleSink` (affichage sur stdout) reste la valeur par défaut lorsque `-datalake-url` n'est pas fourni, pour exécuter ce collecteur de manière autonome.
 * **Comment cela s'intègre dans le reste de l'écosystème.** Un service frère sous HYDRA-UMC-DATALAKE - le composant qui contacte réellement HYDRA-UMC-SERVER pour la télémétrie par robot et l'écrit dans l'entrepôt de séries temporelles partagé.
+* **Pourquoi la déduplication est un package `dedup` séparé, indexé sur un `Sequence` optionnel, et non un hachage du contenu de l'échantillon lui-même.** Une vraie reconnexion renvoie les mêmes octets identiques, donc le hachage de contenu fonctionnerait pour ce cas - mais il avalerait aussi silencieusement deux échantillons réellement différents qui partagent par hasard tous les champs (par ex. deux lectures de `0.0` à une seconde d'intervalle). Un numéro de séquence par producteur est ce qu'un vrai appareil doit déjà suivre pour ses propres messages non acquittés, donc le réutiliser est le signal honnête et réel - pas une supposition tirée de données qui ne promettent pas réellement l'unicité. `Sequence == 0`/omis exclut entièrement un producteur, donc rien du comportement préexistant ne change pour un appareil qui n'en envoie pas.
+* **Pourquoi `sink.InvalidDataError` ne change pas la politique de nouvelle tentative, mais la rend seulement diagnosticable.** La remise en file et nouvelle tentative tout-ou-rien de `collector.go` (voir ci-dessus) reste exactement la même - un échantillon définitivement invalide continue d'être réessayé comme n'importe quel autre, ce qui est en soi une limitation connue et documentée (voir `mejoras_futuras.txt`). Ce qui est nouveau, c'est une vraie visibilité : `invalidDataErrors` face à `transportErrors` dans `GET /stats` permet à un opérateur de distinguer « DATALAKE rejette nos données » de « le réseau vers DATALAKE est en panne » sans avoir à deviner à partir des logs.
 
 ---
 
@@ -67,8 +71,9 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── main.go           # Point d'entrée : relie tout, démarre l'API HTTP
 │   ├── telemetry/        # Type Sample + analyseurs CAN/WebSocket (normalisation)
 │   ├── buffer/           # File FIFO bornée signalant la contre-pression (Ring)
-│   ├── collector/        # Orchestre ingestion+vidage, réessaie si le sink échoue
-│   ├── sink/              # Où vont les lots vidés (ConsoleSink aujourd'hui)
+│   ├── dedup/            # Déduplication réelle par séquence par producteur (fenêtre de réordonnancement)
+│   ├── collector/        # Orchestre ingestion+vidage, réessaie si le sink échoue, dédup
+│   ├── sink/              # Où vont les lots vidés (ConsoleSink aujourd'hui), classification transport/données invalides
 │   └── api/                # Handlers JSON/HTTP simples encapsulant le collecteur
 ├── docs/
 │   └── API.md              # Référence réelle des endpoints HTTP (requêtes, réponses, codes de statut)

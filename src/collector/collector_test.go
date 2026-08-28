@@ -5,9 +5,11 @@ package collector
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
 )
 
@@ -34,6 +36,22 @@ func (m *memorySink) Write(batch []telemetry.Sample) error {
 
 func wsMessage(sourceID string) []byte {
 	return []byte(`{"sourceId":"` + sourceID + `","kind":"motor_temp","timestamp":1700000000000,"fields":{"value":1}}`)
+}
+
+func wsMessageWithSeq(sourceID string, seq uint64) []byte {
+	return []byte(fmt.Sprintf(
+		`{"sourceId":%q,"kind":"motor_temp","timestamp":1700000000000,"fields":{"value":1},"sequence":%d}`,
+		sourceID, seq,
+	))
+}
+
+// invalidDataSink is a real Sink that always fails with a real
+// *sink.InvalidDataError, standing in for DATALAKE genuinely rejecting a
+// sample's content (as opposed to a transport failure).
+type invalidDataSink struct{}
+
+func (invalidDataSink) Write(batch []telemetry.Sample) error {
+	return &sink.InvalidDataError{Sample: batch[0], Status: 400, Body: "bad data"}
 }
 
 func TestCollector_IngestAndFlushHappyPath(t *testing.T) {
@@ -129,6 +147,114 @@ func TestCollector_BackpressureIsReportedNotSwallowed(t *testing.T) {
 	err := c.IngestWS(wsMessage("robot-2"))
 	if err == nil {
 		t.Fatal("expected a buffer-full error on the second ingest, got nil")
+	}
+}
+
+func TestCollector_DuplicateSequenceIsRejectedNotBuffered(t *testing.T) {
+	s := &memorySink{}
+	c := New(10, s)
+
+	if err := c.IngestWS(wsMessageWithSeq("robot-1", 1)); err != nil {
+		t.Fatalf("first ingest: %v", err)
+	}
+	err := c.IngestWS(wsMessageWithSeq("robot-1", 1))
+	if !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("second ingest of the same sequence: err = %v, want ErrDuplicate", err)
+	}
+	if c.BufferLen() != 1 {
+		t.Fatalf("BufferLen() = %d, want 1 - the duplicate must not be re-buffered", c.BufferLen())
+	}
+	stats := c.Stats()
+	if stats.Ingested != 1 {
+		t.Fatalf("Ingested = %d, want 1 - the duplicate must not inflate the count", stats.Ingested)
+	}
+	if stats.Duplicates != 1 {
+		t.Fatalf("Duplicates = %d, want 1", stats.Duplicates)
+	}
+}
+
+func TestCollector_RealDisconnectReconnectResendIsDeduplicated(t *testing.T) {
+	// The real scenario the promotion audit calls out: a device sends
+	// sequences 1-3, the connection drops before it receives acks, it
+	// reconnects and - unsure what actually made it through - resends
+	// 2 and 3 again before continuing with the genuinely new 4.
+	s := &memorySink{}
+	c := New(10, s)
+
+	for _, seq := range []uint64{1, 2, 3} {
+		if err := c.IngestWS(wsMessageWithSeq("robot-1", seq)); err != nil {
+			t.Fatalf("initial ingest of sequence %d: %v", seq, err)
+		}
+	}
+
+	// "reconnect" - nothing special about the collector's own state, the
+	// same device just resends what it wasn't sure arrived.
+	for _, seq := range []uint64{2, 3} {
+		err := c.IngestWS(wsMessageWithSeq("robot-1", seq))
+		if !errors.Is(err, ErrDuplicate) {
+			t.Fatalf("resent sequence %d after reconnect: err = %v, want ErrDuplicate", seq, err)
+		}
+	}
+
+	if err := c.IngestWS(wsMessageWithSeq("robot-1", 4)); err != nil {
+		t.Fatalf("genuinely new sequence 4 after the resend: %v", err)
+	}
+
+	stats := c.Stats()
+	if stats.Ingested != 4 {
+		t.Fatalf("Ingested = %d, want 4 (1,2,3,4 exactly once each) - the resend must not inflate this", stats.Ingested)
+	}
+	if stats.Duplicates != 2 {
+		t.Fatalf("Duplicates = %d, want 2 (the resent 2 and 3)", stats.Duplicates)
+	}
+	if c.BufferLen() != 4 {
+		t.Fatalf("BufferLen() = %d, want 4 - one buffered copy of each real sample", c.BufferLen())
+	}
+}
+
+func TestCollector_SamplesWithoutSequenceAreNeverDeduplicated(t *testing.T) {
+	// Sequence 0 ("not provided") must behave exactly like before dedup
+	// existed - a producer that doesn't opt in isn't affected.
+	s := &memorySink{}
+	c := New(10, s)
+
+	if err := c.IngestWS(wsMessage("robot-1")); err != nil {
+		t.Fatalf("first ingest: %v", err)
+	}
+	if err := c.IngestWS(wsMessage("robot-1")); err != nil {
+		t.Fatalf("second ingest (no sequence, must not be deduplicated): %v", err)
+	}
+	if c.Stats().Duplicates != 0 {
+		t.Fatalf("Duplicates = %d, want 0 for samples that never provided a sequence", c.Stats().Duplicates)
+	}
+}
+
+func TestCollector_InvalidDataFlushErrorIsClassifiedSeparatelyFromTransport(t *testing.T) {
+	c := New(10, invalidDataSink{})
+	_ = c.IngestWS(wsMessage("robot-1"))
+	c.FlushOnce(10)
+
+	stats := c.Stats()
+	if stats.InvalidDataErrors != 1 {
+		t.Fatalf("InvalidDataErrors = %d, want 1", stats.InvalidDataErrors)
+	}
+	if stats.TransportErrors != 0 {
+		t.Fatalf("TransportErrors = %d, want 0 - this failure was a real InvalidDataError, not transport", stats.TransportErrors)
+	}
+}
+
+func TestCollector_GenericSinkFailureIsClassifiedAsTransport(t *testing.T) {
+	s := &memorySink{fail: true}
+	c := New(10, s)
+	_ = c.IngestWS(wsMessage("robot-1"))
+	c.FlushOnce(10)
+
+	stats := c.Stats()
+	if stats.TransportErrors != 1 {
+		t.Fatalf("TransportErrors = %d, want 1", stats.TransportErrors)
+	}
+	if stats.InvalidDataErrors != 0 {
+		t.Fatalf("InvalidDataErrors = %d, want 0 - a generic sink error is not a real InvalidDataError", stats.InvalidDataErrors)
 	}
 }
 

@@ -74,6 +74,10 @@ func (s *Server) handleIngestCAN(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusServiceUnavailable, err)
 			return
 		}
+		if errors.Is(err, collector.ErrDuplicate) {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "duplicate"})
+			return
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -96,6 +100,10 @@ func (s *Server) handleIngestWS(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusServiceUnavailable, err)
 			return
 		}
+		if errors.Is(err, collector.ErrDuplicate) {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "duplicate"})
+			return
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -110,12 +118,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats := s.collector.Stats()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ingested":     stats.Ingested,
-		"ingestErrors": stats.IngestErrors,
-		"flushed":      stats.Flushed,
-		"flushErrors":  stats.FlushErrors,
-		"dropped":      stats.Dropped,
-		"bufferLen":    s.collector.BufferLen(),
-		"bufferCap":    s.collector.BufferCap(),
+		"ingested":          stats.Ingested,
+		"ingestErrors":      stats.IngestErrors,
+		"duplicates":        stats.Duplicates,
+		"flushed":           stats.Flushed,
+		"flushErrors":       stats.FlushErrors,
+		"invalidDataErrors": stats.InvalidDataErrors,
+		"transportErrors":   stats.TransportErrors,
+		"dropped":           stats.Dropped,
+		"bufferLen":         s.collector.BufferLen(),
+		"bufferCap":         s.collector.BufferCap(),
 	})
 }

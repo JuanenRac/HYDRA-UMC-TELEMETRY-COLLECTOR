@@ -32,6 +32,15 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.6] - Real sequence deduplication and transport-vs-invalid-data error classification
+
+- **`Sample.Sequence`** (new, optional `uint64`) - a per-producer monotonic counter a real device can attach; `0`/omitted means "not provided" and behaves exactly as before, unchanged.
+- **`src/dedup` (new package)** - `Tracker.Allow(sourceID, sequence)`, a real, bounded (256-entry-per-source) reorder-window deduplicator: the exact `(sourceId, sequence)` pair rejected if already seen or stale (far behind the source's own high-water mark), a genuinely reordered-but-recent sequence still allowed. This is the real mechanism behind "a device that reconnects and resends its last few unacked messages doesn't inflate ingest counts" - `collector.go`'s `ingest()` now checks it before buffering, returning the new `ErrDuplicate`. `POST /ingest/{can,ws}` treats a duplicate as an idempotent `200 {"status": "duplicate"}`, not an error - a real reconnect shouldn't look like a client failure.
+- **`sink.InvalidDataError`** (new) - `DatalakeSink` now distinguishes a real HTTP 400 from DATALAKE (the data itself was rejected - retrying the identical bytes won't help) from any other failure (network error, timeout, 5xx - a real transport problem, where a retry might succeed). `collector.go`'s existing all-or-nothing requeue-and-retry behavior is unchanged either way - this only makes the *reason* a flush failed visible, via two new `Stats`/`GET /stats` fields: `invalidDataErrors` and `transportErrors`.
+- New `GET /stats` fields: `duplicates`, `invalidDataErrors`, `transportErrors` - all additive, existing fields unchanged.
+- 16 new tests across `dedup` (new package, 7 tests), `collector` (5 new: duplicate rejection, a real disconnect/reconnect-resend scenario, samples without a sequence are never deduplicated, invalid-data vs. transport classification), `sink` (3 new: a real 400 classified as invalid data, a real 500 and a real connection failure both classified as transport), and `api` (1 new: the real end-to-end reconnect-resend round trip through `POST /ingest/ws` and `GET /stats`) = 43 total, all passing (`go test ./...`, `go vet ./...` clean).
+- Real verification beyond the test suite: ran the actual compiled binary with a 3-sample buffer, sent sequences 1 and 2 over real HTTP, resent sequence 2 (simulating a reconnect) and confirmed a `200 duplicate` with `ingested` still at the pre-resend count, then filled the buffer and confirmed a real `503` backpressure response - `GET /stats` afterward showed `ingested=3, duplicates=1` exactly.
+
 ## [0.0.5] - Real HYDRA-UMC-DATALAKE sink
 
 - **`src/sink/datalake.go`** - `DatalakeSink`, a real `Sink` implementation

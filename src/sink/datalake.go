@@ -13,12 +13,41 @@ package sink
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
 )
+
+// InvalidDataError means DATALAKE itself rejected this exact sample's
+// content as invalid (a real HTTP 400) - as opposed to a transport-level
+// failure (network error, timeout, 5xx) where retrying the identical
+// bytes might genuinely succeed later. A distinct type so a caller can
+// tell the two apart for real diagnosis (promotion audit line 665-666) -
+// collector.go's requeue-and-retry policy is unchanged either way, this
+// only makes the reason visible.
+type InvalidDataError struct {
+	Sample telemetry.Sample
+	Status int
+	Body   string
+}
+
+func (e *InvalidDataError) Error() string {
+	return fmt.Sprintf(
+		"datalake rejected sample (sourceId=%q kind=%q) as invalid: HTTP %d: %s",
+		e.Sample.SourceID, e.Sample.Kind, e.Status, e.Body,
+	)
+}
+
+// IsInvalidData reports whether err (or something it wraps) is a real
+// InvalidDataError, as opposed to a transport-level failure.
+func IsInvalidData(err error) bool {
+	var invalid *InvalidDataError
+	return errors.As(err, &invalid)
+}
 
 // DatalakeSink writes each sample to a real HYDRA-UMC-DATALAKE instance's
 // POST /ingest, one HTTP request per sample - DATALAKE's own API is
@@ -82,7 +111,15 @@ func (d *DatalakeSink) writeOne(s telemetry.Sample) error {
 	// ingest (see its POST /ingest handler) - anything else is a real
 	// failure, not assumed to be fine.
 	if resp.StatusCode != http.StatusAccepted {
-		return fmt.Errorf("datalake returned HTTP %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if resp.StatusCode == http.StatusBadRequest {
+			// DATALAKE's own api.py returns 400 specifically when it
+			// validated and rejected this sample's content - a real,
+			// permanent rejection of these exact bytes, not a transient
+			// problem retrying will fix.
+			return &InvalidDataError{Sample: s, Status: resp.StatusCode, Body: string(body)}
+		}
+		return fmt.Errorf("datalake returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
 	return nil
 }
