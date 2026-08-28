@@ -1,31 +1,57 @@
 @echo off
-REM =============================================================================
-REM HYDRA-UMC-TELEMETRY-COLLECTOR - build.bat
-REM Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-REM GPL-3.0 - see LICENSE
-REM =============================================================================
+REM HYDRA_UMC_SCRIPT_STANDARD_HEADER_BEGIN
+REM *****************************************************************************
+REM Project   : HYDRA-UMC-TELEMETRY-COLLECTOR
+REM Script    : build.bat
+REM Purpose   : Incremental project build, verification and packaging workflow.
+REM Author    : JuanenRac (Electro Hobby 3D)
+REM Email     : electrohobby3d@gmail.com
+REM Copyright : (C) 2026 JuanenRac
+REM License   : GPL-3.0 - see LICENSE
+REM *****************************************************************************
+REM HYDRA_UMC_SCRIPT_STANDARD_HEADER_END
+REM HYDRA_UMC_SCRIPT_STANDARD_BANNER_BEGIN
+echo.
+echo *****************************************************************************
+echo * HYDRA-UMC-TELEMETRY-COLLECTOR - build.bat
+echo * Mode      : INCREMENTAL BUILD
+echo * Author    : JuanenRac (Electro Hobby 3D)
+echo * Email     : electrohobby3d@gmail.com
+echo * Copyright : (C) 2026 JuanenRac
+echo * License   : GPL-3.0 - see LICENSE
+echo * ------------------------------------------------------------------------- *
+echo * 1. Increment the project version and synchronise its manifest.
+echo * 2. Run this project's declared build, verification and packaging commands.
+echo * 3. Report the result and keep an interactive terminal open.
+echo *****************************************************************************
+echo.
+REM HYDRA_UMC_SCRIPT_STANDARD_BANNER_END
 REM Builds HYDRA-UMC-TELEMETRY-COLLECTOR: bumps the version, then compiles
 REM the Go module in src/ into build/telemetry-collector.exe. Run this
 REM before run.bat.
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
-
-echo.
-echo  ===============================================================
-echo   H Y D R A - U M C - T E L E M E T R Y - C O L L E C T O R  -  build
-echo  ===============================================================
-echo   High-throughput ingestion node for CAN and WebSocket logs
-echo   Author:  JuanenRac (Electro Hobby 3D)
-echo   License: GPL-3.0 (see LICENSE.md)
-echo  ===============================================================
-echo.
-
-echo [1/2] Bumping version number (odometer bump, see bump_version.py)...
+REM HYDRA_UMC_SCRIPT_STANDARD_VERSION_STEP
+echo [1/2] Incrementing project version and synchronising its manifest...
 python bump_version.py
 if errorlevel 1 ( echo NATIVE VERSION BUMP FAILED. & pause & exit /b 1 )
+REM HYDRA_UMC_SCRIPT_STANDARD_VERSION_CAPTURE_BEFORE
+for /f "usebackq delims=" %%V in (`python -c "import json; print(json.load(open(r'%~dp0hydra-umc.project.json', encoding='utf-8'))['version'])"`) do set "HYDRA_UMC_VERSION_BEFORE=%%V"
 python "%~dp0bump_manifest_version.py" --sync
 if errorlevel 1 ( echo VERSION SYNCHRONIZATION FAILED. & pause & exit /b 1 )
 if errorlevel 1 goto :error
+REM HYDRA_UMC_SCRIPT_STANDARD_VERSION_CAPTURE_AFTER
+for /f "usebackq delims=" %%V in (`python -c "import json; print(json.load(open(r'%~dp0hydra-umc.project.json', encoding='utf-8'))['version'])"`) do set "HYDRA_UMC_VERSION_AFTER=%%V"
+if not defined HYDRA_UMC_VERSION_BEFORE set "HYDRA_UMC_VERSION_BEFORE=unknown"
+if not defined HYDRA_UMC_VERSION_AFTER set "HYDRA_UMC_VERSION_AFTER=unknown"
+echo.
+echo *****************************************************************************
+echo * VERSION INCREMENT COMPLETED
+echo * v%HYDRA_UMC_VERSION_BEFORE% ^> v%HYDRA_UMC_VERSION_AFTER%
+echo * Project manifest has been synchronised by the project build flow.
+echo *****************************************************************************
+echo.
+echo.
 echo       Done.
 echo.
 
