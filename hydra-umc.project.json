@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "ecosystem": "HYDRA-UMC",
   "name": "HYDRA-UMC-TELEMETRY-COLLECTOR",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "role": "api",
   "stack": "go",
   "technologies": [
@@ -20,5 +20,9 @@
   "native_version": {
     "file": "src/version.go",
     "pattern": "Version\\s*=\\s*\"(\\d+)\\.(\\d+)\\.(\\d+)\""
+  },
+  "service": {
+    "port": 8092,
+    "health_path": "/stats"
   }
 }

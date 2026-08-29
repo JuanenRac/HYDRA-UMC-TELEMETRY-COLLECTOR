@@ -32,6 +32,13 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.8] - Real ecosystem live-status opt-in
+
+- **`hydra-umc.project.json`** declares its real `service.port` (8092)
+  and `health_path` (`/stats`) - HYDRA-UMC-SERVER's ecosystem status
+  endpoint now does a real HTTP GET against it (expecting 2xx) instead
+  of only reporting static manifest metadata.
+
 ## [0.0.7] - Fixed after a live ecosystem bug audit
 
 - **`sink/sink.go`** doc comment - said DATALAKE "has no ingest endpoint
