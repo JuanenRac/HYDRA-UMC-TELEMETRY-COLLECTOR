@@ -32,6 +32,17 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.7] - Fixed after a live ecosystem bug audit
+
+- **`sink/sink.go`** doc comment - said DATALAKE "has no ingest endpoint
+  of its own yet" and that there was "nothing real to write an HTTP/gRPC
+  sink against today". That went stale when `sink/datalake.go`'s
+  `DatalakeSink` (a real client against DATALAKE's `POST /ingest`) was
+  added - `main.go`'s own comment already described it correctly. Reworded
+  to describe what actually exists today: `ConsoleSink` as the honest
+  default for local development/no-DATALAKE deployments, `DatalakeSink`
+  as the real, already-wired alternative.
+
 ## [0.0.6] - Real sequence deduplication and transport-vs-invalid-data error classification
 
 - **`Sample.Sequence`** (new, optional `uint64`) - a per-producer monotonic counter a real device can attach; `0`/omitted means "not provided" and behaves exactly as before, unchanged.

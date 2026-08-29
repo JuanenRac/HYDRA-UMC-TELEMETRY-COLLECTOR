@@ -2,13 +2,13 @@
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
 // GPL-3.0 - see LICENSE
 //
-// Sink is where drained batches actually go. HYDRA-UMC-DATALAKE (the
-// real destination the README names) has no ingest endpoint of its own
-// yet - it's andamiaje beyond its own entry point too - so there is
-// nothing real to write an HTTP/gRPC sink against today. ConsoleSink is
-// the honest v0: a real, working sink (not a no-op stub) that proves the
-// collector's own delivery path end-to-end, swappable for a DATALAKE
-// sink later without touching collector.go (Sink is the seam).
+// Sink is where drained batches actually go. HYDRA-UMC-DATALAKE now has a
+// real `POST /ingest` endpoint (see datalake.go's DatalakeSink, wired in
+// by main.go when -datalake-url is set). ConsoleSink stays the honest v0
+// default: a real, working sink (not a no-op stub) for local development
+// and any deployment that doesn't run DATALAKE, proving the collector's
+// own delivery path end-to-end without depending on it - Sink is the seam
+// that let DatalakeSink slot in later without touching collector.go.
 package sink
 
 import (
