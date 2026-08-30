@@ -20,6 +20,15 @@ semantic-versioning judgment calls:
 
 ---
 
+## Unreleased - finite telemetry field validation
+
+- Rejects empty field names and `NaN`/infinite numeric values before they
+  reach the buffer or an external sink. CAN decoding now performs the same
+  validation as JSON ingestion, so malformed sensor payloads fail at the
+  protocol boundary instead of becoming a delayed downstream error.
+
+---
+
 ## Documentation - Real HTTP API reference
 
 - **`docs/API.md`** (new) - every real endpoint (`POST /ingest/can`,

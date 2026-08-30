@@ -11,12 +11,14 @@
 // originally arrived over.
 package telemetry
 
+import "math"
+
 // Sample is one normalized telemetry reading.
 type Sample struct {
 	SourceID  string             `json:"sourceId"`  // e.g. "robot-1", "vision-node-1"
 	Kind      string             `json:"kind"`      // e.g. "motor_current", "motor_temp"
 	Timestamp int64              `json:"timestamp"` // unix milliseconds
-	Fields    map[string]float64 `json:"fields"`     // open key/value, same convention as hydra.common.v1's HealthReport.metrics
+	Fields    map[string]float64 `json:"fields"`    // open key/value, same convention as hydra.common.v1's HealthReport.metrics
 	// Sequence is an optional, per-producer monotonic counter a real
 	// device can attach so a reconnect that resends its last few
 	// unacked messages doesn't silently inflate ingest counts (see
@@ -39,6 +41,11 @@ func (s Sample) Validate() error {
 	}
 	if s.Timestamp <= 0 {
 		return ErrInvalidTimestamp
+	}
+	for key, value := range s.Fields {
+		if key == "" || math.IsNaN(value) || math.IsInf(value, 0) {
+			return ErrInvalidField
+		}
 	}
 	return nil
 }

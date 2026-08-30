@@ -9,5 +9,6 @@ var (
 	ErrMissingSourceID  = errors.New("telemetry: sample has no sourceId")
 	ErrMissingKind      = errors.New("telemetry: sample has no kind")
 	ErrInvalidTimestamp = errors.New("telemetry: sample has no positive timestamp")
+	ErrInvalidField     = errors.New("telemetry: sample has an invalid field")
 	ErrInvalidCANFrame  = errors.New("telemetry: invalid CAN frame")
 )

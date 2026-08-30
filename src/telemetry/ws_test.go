@@ -3,7 +3,11 @@
 // GPL-3.0 - see LICENSE
 package telemetry
 
-import "testing"
+import (
+	"errors"
+	"math"
+	"testing"
+)
 
 func TestParseWSMessage_Valid(t *testing.T) {
 	raw := []byte(`{"sourceId":"robot-1","kind":"motor_temp","timestamp":1700000000000,"fields":{"value":42.5}}`)
@@ -39,5 +43,22 @@ func TestParseWSMessage_RejectsMissingTimestamp(t *testing.T) {
 	_, err := ParseWSMessage(raw)
 	if err != ErrInvalidTimestamp {
 		t.Fatalf("err = %v, want ErrInvalidTimestamp", err)
+	}
+}
+
+func TestSampleValidateRejectsNonFiniteOrUnnamedFields(t *testing.T) {
+	base := Sample{SourceID: "robot-1", Kind: "motor_temp", Timestamp: 1}
+	for name, fields := range map[string]map[string]float64{
+		"nan":      {"value": math.NaN()},
+		"infinity": {"value": math.Inf(1)},
+		"unnamed":  {"": 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sample := base
+			sample.Fields = fields
+			if !errors.Is(sample.Validate(), ErrInvalidField) {
+				t.Fatalf("Validate() = %v, want ErrInvalidField", sample.Validate())
+			}
+		})
 	}
 }

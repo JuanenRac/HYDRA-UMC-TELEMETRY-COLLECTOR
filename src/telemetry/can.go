@@ -56,12 +56,16 @@ func ParseCANFrame(arbitrationID uint32, data []byte) (Sample, error) {
 	bits := binary.LittleEndian.Uint32(data[1:5])
 	value := float64(math.Float32frombits(bits))
 
-	return Sample{
+	sample := Sample{
 		SourceID:  fmt.Sprintf("robot-%d", arbitrationID),
 		Kind:      kind,
 		Timestamp: nowFunc(),
 		Fields:    map[string]float64{"value": value},
-	}, nil
+	}
+	if err := sample.Validate(); err != nil {
+		return Sample{}, err
+	}
+	return sample, nil
 }
 
 // EncodeCANFrame is the inverse of ParseCANFrame - real, not a stub,
