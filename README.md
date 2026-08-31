@@ -93,7 +93,7 @@ HTTP endpoint reference.
 
 ---
 
-## 4. ⚙️ BUILD & RUN
+## 4. ⚙️ BUILD & RUN GUIDE
 
 Requires Go >= 1.21. A real ingestion pipeline with an HTTP API, not just a
 skeleton that compiles.
