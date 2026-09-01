@@ -162,6 +162,7 @@ This project is part of a larger robotics ecosystem by the same author (JuanenRa
 ### Directly Related (outside the family)
 
 - **[HYDRA-UMC-SERVER](https://github.com/JuanenRac/HYDRA-UMC-SERVER)** — the source of the logs this project ingests.
+- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** / **[URTC](https://github.com/JuanenRac/URTC)** — the real CAN ID tables this project's own CAN wire format is meant to eventually integrate against; today it uses its own v0 convention, honestly tracked as future work in `mejoras_futuras.txt` rather than claimed as done.
 
 ### Rest of the Ecosystem
 
