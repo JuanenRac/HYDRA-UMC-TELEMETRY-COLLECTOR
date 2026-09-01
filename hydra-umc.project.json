@@ -23,6 +23,7 @@
   },
   "service": {
     "port": 8092,
-    "health_path": "/stats"
+    "health_path": "/stats",
+    "systemd_unit": "hydra-umc-telemetry-collector.service"
   }
 }
