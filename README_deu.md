@@ -140,7 +140,7 @@ cd src && go test ./...   # telemetry (CAN-Roundtrip, WS-Validierung),
 
 ---
 
-## 🚀 ROADMAP
+## 🚀 FAHRPLAN
 * **Phase 1:** Hochdurchsatz-Ingestion und Indexierung des Datalakes für historische Analysen.
 * **Phase 2:** Edge-Kompression des Telemetrie-Collectors und sichere Übertragungsprotokolle.
 * **Phase 3:** Anomalieerkennung mittels unüberwachtem Lernen und Motorvibrationsanalyse.

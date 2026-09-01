@@ -140,7 +140,7 @@ cd src && go test ./...   # telemetry (aller-retour CAN, validation WS),
 
 ---
 
-## 🚀 ROADMAP
+## 🚀 FEUILLE DE ROUTE
 * **Phase 1 :** Ingestion à haut débit du Datalake et indexation pour l'analyse historique.
 * **Phase 2 :** Compression à la périphérie du collecteur de télémétrie et protocoles de transmission sécurisés.
 * **Phase 3 :** Détection d'anomalies à l'aide de l'apprentissage non supervisé et analyse des vibrations du moteur.

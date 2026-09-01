@@ -140,7 +140,7 @@ cd src && go test ./...   # telemetry (round-trip CAN, validazione WS),
 
 ---
 
-## 🚀 ROADMAP
+## 🚀 TABELLA DI MARCIA
 * **Fase 1:** Ingestione ad alto throughput del Datalake e indicizzazione per l'analisi storica.
 * **Fase 2:** Compressione edge del collettore di telemetria e protocolli di trasmissione sicuri.
 * **Fase 3:** Rilevamento delle anomalie tramite apprendimento non supervisionato e analisi delle vibrazioni del motore.
