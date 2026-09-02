@@ -80,18 +80,23 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── api/                # 封装 collector 的简单 JSON/HTTP 处理器
 ├── docs/
 │   └── API.md              # 真实的 HTTP 端点参考（请求、响应、状态码）
+├── images/               # 媒体与图表
+├── systemd/
+│   └── hydra-umc-telemetry-collector.service # 本地 CM5 遥测数据摄取 API 的 systemd 单元
+├── tools/
+│   ├── build_test.py     # 不递增版本号的构建检查
+│   └── ci_validate.py    # CI 使用的清单/CHANGELOG/文档校验
 ├── build/                # 编译后的二进制文件（已被 gitignore）
-├── bump_version.py        # 里程表式版本递增（由构建运行）
+├── bump_version.py        # 原生版本的里程表式递增（由构建运行）
+├── bump_manifest_version.py # 将 hydra-umc.project.json 的版本与原生版本同步(--sync)
 ├── build.sh / build.bat   # 真实构建：版本递增 + go build
 ├── run.sh / run.bat       # 真实运行：执行编译后的二进制文件
 └── README.md
 ```
 
-从原始模板中省略：`hardware/`、`firmware/`、`os/`、
-`images/` 和 `scripts/`——这是一个纯软件服务（Go 二进制文件），
-没有专属硬件或固件，没有需要维护的操作系统镜像，目前也还没有
-足够多的媒体/实用脚本内容值得为它们单独建立文件夹。完整的 HTTP
-端点参考见 [`docs/API.md`](docs/API.md)。
+从原始模板中省略：`hardware/`、`firmware/` 和 `os/`——这是一个纯软件服务
+（Go 二进制文件），没有专属硬件或固件，也没有需要维护的操作系统镜像。
+完整的 HTTP 端点参考见 [`docs/API.md`](docs/API.md)。
 
 ---
 

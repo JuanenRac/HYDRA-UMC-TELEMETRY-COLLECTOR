@@ -77,18 +77,23 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── api/                # Einfache JSON/HTTP-Handler, die den Collector umschließen
 ├── docs/
 │   └── API.md              # Echte HTTP-Endpunktreferenz (Requests, Responses, Statuscodes)
+├── images/               # Medien und Diagramme
+├── systemd/
+│   └── hydra-umc-telemetry-collector.service # systemd-Unit der lokalen CM5-Telemetrie-Erfassungs-API
+├── tools/
+│   ├── build_test.py     # Nicht-versionierender Build-Check
+│   └── ci_validate.py    # Manifest/CHANGELOG/Docs-Validierung, von CI genutzt
 ├── build/                # Kompilierte Binärdateien (von git ignoriert)
-├── bump_version.py        # Versionserhöhung im "Kilometerzähler"-Stil (vom Build ausgeführt)
+├── bump_version.py        # Native Versionserhöhung im "Kilometerzähler"-Stil (vom Build ausgeführt)
+├── bump_manifest_version.py # Synchronisiert die Version von hydra-umc.project.json mit der nativen (--sync)
 ├── build.sh / build.bat   # Echter Build: Bump + go build
 ├── run.sh / run.bat       # Echte Ausführung: startet die kompilierte Binärdatei
 └── README.md
 ```
 
-Aus der ursprünglichen Vorlage entfernt: `hardware/`, `firmware/`, `os/`,
-`images/` und `scripts/` — dies ist ein reiner Softwaredienst
-(Go-Binärdatei) ohne eigene Hardware oder Firmware, ohne zu pflegendes
-Betriebssystem-Image, und ohne Medien-/Utility-Skript-Inhalt, der eigene
-Ordner bislang rechtfertigen würde. Siehe [`docs/API.md`](docs/API.md)
+Aus der ursprünglichen Vorlage entfernt: `hardware/`, `firmware/` und
+`os/` — dies ist ein reiner Softwaredienst (Go-Binärdatei) ohne eigene
+Hardware oder Firmware und ohne zu pflegendes Betriebssystem-Image. Siehe [`docs/API.md`](docs/API.md)
 für die vollständige HTTP-Endpunktreferenz.
 
 ---

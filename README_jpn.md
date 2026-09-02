@@ -83,19 +83,24 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── api/                # collector を包む単純な JSON/HTTP ハンドラー
 ├── docs/
 │   └── API.md              # 本物の HTTP エンドポイントリファレンス（リクエスト、レスポンス、ステータスコード）
+├── images/               # メディアと図表
+├── systemd/
+│   └── hydra-umc-telemetry-collector.service # ローカルCM5テレメトリ取り込みAPIのsystemdユニット
+├── tools/
+│   ├── build_test.py     # バージョンを増やさないビルドチェック
+│   └── ci_validate.py    # CI が使用するマニフェスト/CHANGELOG/ドキュメント検証
 ├── build/                # コンパイル済みバイナリ（gitignore 対象）
-├── bump_version.py        # オドメーター式バージョンインクリメント（ビルドが実行）
+├── bump_version.py        # ネイティブバージョンのオドメーター式インクリメント（ビルドが実行）
+├── bump_manifest_version.py # hydra-umc.project.json のバージョンをネイティブ版と同期(--sync)
 ├── build.sh / build.bat   # 実際のビルド：バージョンインクリメント + go build
 ├── run.sh / run.bat       # 実際の実行：コンパイル済みバイナリを実行
 └── README.md
 ```
 
-元のテンプレートから省略：`hardware/`、`firmware/`、`os/`、
-`images/`、`scripts/` —— これは純粋なソフトウェアサービス(Go バイナリ)
-であり、専用のハードウェアやファームウェア、維持すべき
-オペレーティングシステムイメージもなく、専用フォルダを正当化するほどの
-メディア/ユーティリティスクリプトの内容もまだありません。完全な HTTP
-エンドポイントリファレンスは [`docs/API.md`](docs/API.md) を参照。
+元のテンプレートから省略：`hardware/`、`firmware/`、`os/` —— これは純粋な
+ソフトウェアサービス(Go バイナリ)であり、専用のハードウェアや
+ファームウェア、維持すべきオペレーティングシステムイメージもありません。
+完全な HTTP エンドポイントリファレンスは [`docs/API.md`](docs/API.md) を参照。
 
 ---
 

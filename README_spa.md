@@ -77,18 +77,23 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── api/                # Handlers JSON/HTTP planos que envuelven el collector
 ├── docs/
 │   └── API.md              # Referencia real de endpoints HTTP (peticiones, respuestas, codigos de estado)
+├── images/               # Medios y diagramas
+├── systemd/
+│   └── hydra-umc-telemetry-collector.service # Unidad systemd de la API local de ingesta de telemetría en la CM5
+├── tools/
+│   ├── build_test.py     # Comprobación de compilación sin versionado
+│   └── ci_validate.py    # Validación de manifiesto/CHANGELOG/docs usada por CI
 ├── build/                # Binarios compilados (ignorado por git)
-├── bump_version.py        # Incremento de versión tipo cuentakilómetros (lo ejecuta el build)
+├── bump_version.py        # Incremento de versión nativa tipo cuentakilómetros (lo ejecuta el build)
+├── bump_manifest_version.py # Sincroniza la versión de hydra-umc.project.json con la nativa (--sync)
 ├── build.sh / build.bat   # Build real: bump + go build
 ├── run.sh / run.bat       # Ejecución real: corre el binario compilado
 └── README.md
 ```
 
-Podado de la plantilla original: `hardware/`, `firmware/`, `os/`,
-`images/` y `scripts/` — es un servicio de software puro (binario Go) sin
-hardware ni firmware propios, sin imagen de sistema operativo que
-mantener, y sin contenido de medios/scripts de utilidad todavía suficiente
-para justificar sus propias carpetas. Ver [`docs/API.md`](docs/API.md)
+Podado de la plantilla original: `hardware/`, `firmware/` y `os/` — es un
+servicio de software puro (binario Go) sin hardware ni firmware propios y
+sin imagen de sistema operativo que mantener. Ver [`docs/API.md`](docs/API.md)
 para la referencia completa de endpoints HTTP.
 
 ---
