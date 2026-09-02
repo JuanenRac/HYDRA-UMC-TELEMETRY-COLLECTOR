@@ -163,6 +163,7 @@ Ce projet fait partie d'un écosystème robotique plus large du même auteur (Ju
 ### Relation Directe (hors de la famille)
 
 - **[HYDRA-UMC-SERVER](https://github.com/JuanenRac/HYDRA-UMC-SERVER)** — la source des logs ingérés par ce projet.
+- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** / **[URTC](https://github.com/JuanenRac/URTC)** — les véritables tables d'ID CAN contre lesquelles le propre format de trame CAN v0 de ce projet est destiné à s'intégrer un jour ; aujourd'hui il utilise sa propre convention v0, honnêtement suivie comme travail futur dans `mejoras_futuras.txt` plutôt que revendiquée comme terminée.
 
 ### Reste de l'Écosystème
 

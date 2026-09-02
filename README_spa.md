@@ -163,6 +163,7 @@ Este proyecto forma parte de un ecosistema de robótica más amplio del mismo au
 ### Relación Directa (fuera de la familia)
 
 - **[HYDRA-UMC-SERVER](https://github.com/JuanenRac/HYDRA-UMC-SERVER)** — la fuente de los logs que ingiere este proyecto.
+- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** / **[URTC](https://github.com/JuanenRac/URTC)** — las tablas reales de ID de CAN contra las que el propio formato de trama CAN v0 de este proyecto está pensado para eventualmente integrarse; hoy usa su propia convención v0, seguida honestamente como trabajo futuro en `mejoras_futuras.txt` en vez de afirmarse como hecho.
 
 ### Resto del Ecosistema
 

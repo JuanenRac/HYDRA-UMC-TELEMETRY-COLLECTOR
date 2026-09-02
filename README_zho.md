@@ -164,6 +164,7 @@ cd src && go test ./...   # telemetry（CAN 往返、WS 校验）、buffer
 ### 直接相关（项目族之外）
 
 - **[HYDRA-UMC-SERVER](https://github.com/JuanenRac/HYDRA-UMC-SERVER)** —— 本项目所摄取日志的来源。
+- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** / **[URTC](https://github.com/JuanenRac/URTC)** —— 本项目自身的 CAN 线路格式 v0 打算最终与之集成的真实 CAN ID 表;目前它使用自己的 v0 约定,在 `mejoras_futuras.txt` 中诚实地作为未来工作跟踪,而非被宣称已经完成。
 
 ### 生态系统的其余部分
 

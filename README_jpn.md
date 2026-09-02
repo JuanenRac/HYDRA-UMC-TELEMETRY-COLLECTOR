@@ -173,6 +173,7 @@ cd src && go test ./...   # telemetry(CAN 往復、WS 検証)、buffer(有界
 ### 直接関連（ファミリー外）
 
 - **[HYDRA-UMC-SERVER](https://github.com/JuanenRac/HYDRA-UMC-SERVER)** —— 本プロジェクトが取り込むログの発生源。
+- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** / **[URTC](https://github.com/JuanenRac/URTC)** —— 本プロジェクト自身のCANワイヤーフォーマットv0が、将来的に統合されることを意図している実際のCAN IDテーブル。現在は独自のv0規約を使用しており、完了したと主張するのではなく `mejoras_futuras.txt` で将来の作業として正直に追跡されています。
 
 ### エコシステムのその他のプロジェクト
 
