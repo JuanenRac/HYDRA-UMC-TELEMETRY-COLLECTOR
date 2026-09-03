@@ -37,7 +37,7 @@ Ingests one raw CAN frame (this v0's own fixed 8-byte encoding - see [`telemetry
 | Status | Body | Meaning |
 |---|---|---|
 | 202 | `{"status": "buffered"}` | Frame parsed and pushed onto the internal ring buffer. |
-| 400 | `{"error": "<message>"}` | Malformed JSON, `data` not exactly 8 bytes, or an unknown signal type code. |
+| 400 | `{"error": "<message>"}` | Malformed JSON, `data` not exactly 8 bytes, an unknown signal type code, or a decoded value that fails `Sample.Validate()` (e.g. a non-finite float32). |
 | 503 | `{"error": "buffer: full"}` | The ring buffer has no room - real backpressure, not a silently dropped sample. |
 
 ## `POST /ingest/ws`
@@ -55,7 +55,7 @@ Ingests one telemetry sample already in this collector's own `Sample` JSON shape
 }
 ```
 
-`sourceId` and `kind` are required (non-empty) - see `Sample.Validate()` in [`telemetry/sample.go`](../src/telemetry/sample.go). `timestamp` is Unix epoch milliseconds. `sequence` (uint64, optional) is a real per-producer monotonic counter - see "Deduplication" below.
+`sourceId` and `kind` are required (non-empty) - see `Sample.Validate()` in [`telemetry/sample.go`](../src/telemetry/sample.go). `timestamp` is Unix epoch milliseconds. Every key in `fields` must be non-empty, and every value must be a finite number - a `NaN`/`Infinity`/`-Infinity` value or an empty field name is rejected (`400`) rather than buffered and surfacing as a downstream error later. `POST /ingest/can` runs through this exact same `Validate()` call after decoding, so a malformed CAN payload is rejected at the same boundary as malformed JSON. `sequence` (uint64, optional) is a real per-producer monotonic counter - see "Deduplication" below.
 
 **Responses** - same shape as `/ingest/can` above (`202` on success, `400` for malformed JSON or a failed `Validate()`, `503` if the buffer is full), plus:
 

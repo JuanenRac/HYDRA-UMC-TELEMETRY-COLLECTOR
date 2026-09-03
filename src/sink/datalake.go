@@ -60,8 +60,8 @@ func IsInvalidData(err error) bool {
 // all-or-nothing contract for Sink) - the already-written samples get
 // re-sent on retry, landing as duplicate rows in DATALAKE rather than
 // being lost. Exactly-once delivery (idempotency keys, upserts on the
-// DATALAKE side) is real future work, not attempted here - see
-// mejoras_futuras.txt. At-least-once with occasional duplicates on a
+// DATALAKE side) is real future work, not attempted here.
+// At-least-once with occasional duplicates on a
 // real outage is the honest v0 trade-off, not at-most-once (silently
 // dropping data on a retry).
 type DatalakeSink struct {

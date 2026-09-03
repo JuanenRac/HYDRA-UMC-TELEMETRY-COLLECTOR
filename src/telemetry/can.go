@@ -4,10 +4,10 @@
 //
 // Real CAN frame parsing - but against THIS project's own, self-declared
 // v0 wire format, not the ecosystem's actual documented CAN IDs (the
-// real ones live in HYDRA-UMC's and URTC's own firmware docs, e.g.
-// docs/CANBUS_STM32*.TXT, which this session does not have open - making
-// up ID numbers that merely LOOK like they match would be worse than
-// documenting a clearly-own placeholder format, see mejoras_futuras.txt).
+// real ones live in HYDRA-UMC's and URTC's own firmware docs). Making up
+// ID numbers that merely LOOK like they match those real firmware
+// tables would be worse than honestly documenting a clearly-own
+// placeholder format pending a real integration pass.
 // The payload layout below is real, tested, and round-trips - it's the
 // SOURCE of the ID mapping that's a deliberate placeholder pending a
 // real integration pass against the firmware's own CAN ID tables.

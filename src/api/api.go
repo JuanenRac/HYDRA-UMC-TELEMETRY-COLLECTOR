@@ -6,8 +6,7 @@
 // collector.Collector - same convention already established by
 // HYDRA-UMC-JOB-DISPATCHER for this kind of ops-facing control/ingest
 // surface. A real CAN bus and a real WebSocket stream from
-// HYDRA-UMC-SERVER aren't available in this environment (see
-// mejoras_futuras.txt) - POST /ingest/can and /ingest/ws let a real
+// HYDRA-UMC-SERVER aren't available yet - POST /ingest/can and /ingest/ws let a real
 // caller (or a test/curl) feed this collector genuine frames without
 // needing that hardware/network dependency to prove the pipeline works.
 package api

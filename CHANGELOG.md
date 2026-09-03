@@ -91,7 +91,8 @@ semantic-versioning judgment calls:
   retry logic, so already-written samples get re-sent and land as
   duplicate rows in DATALAKE on the next successful flush - at-least-once
   with occasional duplicates, not silently dropping data. Real
-  exactly-once delivery is future work, see `mejoras_futuras.txt`.
+  exactly-once delivery (idempotency keys, upserts on the DATALAKE side)
+  is future work, not attempted here.
 - Verified for real: 3 new `sink` package tests against a real
   `net/http/httptest.Server` implementing DATALAKE's actual `POST
   /ingest` contract (202 on success) - one confirms every sample in a
@@ -142,8 +143,8 @@ semantic-versioning judgment calls:
 - `build.sh`/`build.bat`/`run.sh`/`run.bat` updated with the
   ecosystem-wide no-auto-close convention (`pause` in `.bat`, an `EXIT`
   trap in `.sh`) and argument forwarding, matching every other project
-  deepened this session.
-- What's still not real, on purpose - see `mejoras_futuras.txt`: a real
+  across the ecosystem.
+- What's still not real, on purpose: a real
   HYDRA-UMC-DATALAKE sink (DATALAKE has no ingest endpoint yet), a real
   CAN bus / WebSocket stream from HYDRA-UMC-SERVER (this collector is
   fed via its own HTTP endpoints today, not a live listener), and
