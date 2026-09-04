@@ -113,11 +113,11 @@ Go >= 1.21 が必要です。コンパイルできるだけの骨組みではな
 ```bash
 # Linux/macOS
 ./build.sh
-./run.sh -addr :8092 -datalake-url http://localhost:8095
+./run.sh -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 
 # Windows
 build.bat
-run.bat -addr :8092 -datalake-url http://localhost:8095
+run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 ```
 
 `build` はバージョンを増加させ（`src/version.go`）、`src/` 内の Go

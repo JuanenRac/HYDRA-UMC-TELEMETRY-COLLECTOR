@@ -109,11 +109,11 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 ```bash
 # Linux/macOS
 ./build.sh
-./run.sh -addr :8092 -datalake-url http://localhost:8095
+./run.sh -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 
 # Windows
 build.bat
-run.bat -addr :8092 -datalake-url http://localhost:8095
+run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 ```
 
 `build` 会递增版本号（`src/version.go`），并将 `src/` 中的 Go 模块编译

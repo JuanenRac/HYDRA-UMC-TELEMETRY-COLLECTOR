@@ -39,7 +39,7 @@ const role = "Telemetry-Collector - high-throughput multi-protocol " +
 	"ingestion node (CAN/WebSocket/gRPC), feeds HYDRA-UMC-DATALAKE."
 
 func main() {
-	addr := flag.String("addr", ":8092", "address to listen on for the HTTP API")
+	addr := flag.String("addr", "127.0.0.1:8092", "address to listen on for the HTTP API")
 	bufferCap := flag.Int("buffer", 10000, "max buffered samples awaiting delivery")
 	flushInterval := flag.Duration("flush-interval", 2*time.Second, "how often to flush buffered samples to the sink")
 	batchSize := flag.Int("batch-size", 500, "max samples per flush")

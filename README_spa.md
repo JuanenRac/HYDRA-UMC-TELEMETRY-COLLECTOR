@@ -107,11 +107,11 @@ esqueleto que compila.
 ```bash
 # Linux/macOS
 ./build.sh
-./run.sh -addr :8092 -datalake-url http://localhost:8095
+./run.sh -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 
 # Windows
 build.bat
-run.bat -addr :8092 -datalake-url http://localhost:8095
+run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 ```
 
 `build` incrementa la versión (`src/version.go`) y compila el módulo Go de

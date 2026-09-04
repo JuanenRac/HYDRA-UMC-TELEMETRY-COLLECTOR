@@ -26,6 +26,14 @@ semantic-versioning judgment calls:
   reach the buffer or an external sink. CAN decoding now performs the same
   validation as JSON ingestion, so malformed sensor payloads fail at the
   protocol boundary instead of becoming a delayed downstream error.
+- **`main.go`**'s `-addr` flag now defaults to `127.0.0.1:8092` instead of
+  `:8092` - an unqualified port binds every interface, and this HTTP API
+  (`POST /ingest/can`, `POST /ingest/ws`, `GET /stats`) has no
+  authentication of its own. The real CM5 deployment was never exposed
+  (`systemd/hydra-umc-telemetry-collector.service` already pins
+  `127.0.0.1:8092` explicitly), but running the binary directly without
+  `-addr` - local dev, a manual invocation - listened on every interface
+  by default. README run examples updated to match in every language.
 
 ---
 
