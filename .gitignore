@@ -1,0 +1,11 @@
+build/
+*.exe
+*.test
+# HYDRA-UMC shared secret protection
+.env
+.env.*
+!.env.example
+
+# Python bytecode (generated locally; never source)
+__pycache__/
+*.py[cod]

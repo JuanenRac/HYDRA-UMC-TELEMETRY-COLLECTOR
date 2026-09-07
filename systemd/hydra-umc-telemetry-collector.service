@@ -1,0 +1,34 @@
+# =============================================================================
+# HYDRA-UMC-TELEMETRY-COLLECTOR - Local CM5 ingestion node systemd unit
+# Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
+# GPL-3.0-or-later - see LICENSE
+# =============================================================================
+# -datalake-url points at HYDRA-UMC-DATALAKE's own real POST /ingest,
+# already installed loopback-only on this same CM5 (install_datalake.sh) -
+# without it this collector would only print flushed samples to stdout,
+# which is fine standalone but not what a real CM5 deployment wants.
+[Unit]
+Description=HYDRA-UMC-TELEMETRY-COLLECTOR real CAN/WebSocket ingestion node
+After=network-online.target hydra-umc-datalake.service
+Wants=network-online.target
+# Not a hard dependency (Requires=) - this collector degrades to
+# stdout-only if Datalake isn't up rather than failing to start, so a
+# soft ordering hint is honest, a hard requirement would not be.
+
+[Service]
+Type=simple
+User=hydra-umc-telemetry-collector
+Group=hydra-umc-telemetry-collector
+WorkingDirectory=/opt/hydra-umc/telemetry-collector
+ExecStart=/opt/hydra-umc/telemetry-collector/telemetry-collector --addr 127.0.0.1:8092 --datalake-url http://127.0.0.1:8095
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
