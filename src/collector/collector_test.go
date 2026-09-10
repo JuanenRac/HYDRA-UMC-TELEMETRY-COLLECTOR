@@ -193,7 +193,7 @@ func TestCollector_DuplicateSequenceIsRejectedNotBuffered(t *testing.T) {
 }
 
 func TestCollector_RealDisconnectReconnectResendIsDeduplicated(t *testing.T) {
-	// The real scenario the promotion audit calls out: a device sends
+	// The real scenario handled here: a device sends
 	// sequences 1-3, the connection drops before it receives acks, it
 	// reconnects and - unsure what actually made it through - resends
 	// 2 and 3 again before continuing with the genuinely new 4.

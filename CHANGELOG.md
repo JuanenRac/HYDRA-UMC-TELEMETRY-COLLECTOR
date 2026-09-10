@@ -49,7 +49,7 @@ semantic-versioning judgment calls:
 
 ## [0.1.0] - A permanently-rejected sample no longer blocks the queue forever (TEL-01)
 
-Found in an ecosystem-wide software-improvements audit, P1:
+A real gap (P1):
 
 - **The bug.** `Collector.FlushOnce` requeued the WHOLE drained batch on
   ANY sink failure, including a sample DATALAKE permanently rejected as
@@ -87,7 +87,7 @@ Found in an ecosystem-wide software-improvements audit, P1:
   lives in `src/`, the one build-shape difference from the sibling Go
   services). Wired to HYDRA-UMC-DATALAKE's real `POST /ingest`, already
   installed loopback-only on the same CM5, via `-datalake-url`. Real gap
-  found auditing the ecosystem against actual CM5 hardware: the real
+  found while testing against actual CM5 hardware: the real
   ingestion pipeline had never been built or installed anywhere.
 
 ## [0.0.8] - Real ecosystem live-status opt-in
@@ -97,7 +97,7 @@ Found in an ecosystem-wide software-improvements audit, P1:
   endpoint now does a real HTTP GET against it (expecting 2xx) instead
   of only reporting static manifest metadata.
 
-## [0.0.7] - Fixed after a live ecosystem bug audit
+## [0.0.7] - Fixed after live end-to-end testing
 
 - **`sink/sink.go`** doc comment - said DATALAKE "has no ingest endpoint
   of its own yet" and that there was "nothing real to write an HTTP/gRPC
