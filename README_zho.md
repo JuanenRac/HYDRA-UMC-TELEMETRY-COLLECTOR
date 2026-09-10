@@ -10,8 +10,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Language-Go%20%2F%20Rust-orange.svg" alt="Go/Rust">
-  <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20gRPC%20%2F%20WS-yellow.svg" alt="Protocol">
+  <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Go">
+  <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
 ---
@@ -19,13 +19,13 @@
 ## 1. 🛠️ 技术概述
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** 是捕获生态系统内所有原始通信的高速
-网关。它监听 FDCAN 总线、WebSocket 流和 gRPC 更新，将数据汇入数据湖。
+网关。它监听 FDCAN 总线和 WebSocket 流，将数据汇入数据湖。
 
 它对异构数据源执行实时解析和归一化，确保 CAN 总线上的电机电流峰值能够
 与来自视觉节点的 AI 推理结果正确关联。
 
 ### 关键特性：
-* 🚀 **多协议摄取：** 处理 CAN、WebSocket、gRPC 和 HTTP 遥测数据。
+* 🚀 **多协议摄取：** 目前通过简单的 HTTP 摄取 API 处理 CAN 和 WebSocket 遥测数据。*(gRPC 摄取计划中)*
 * ⚡ **高吞吐量：** 针对每毫秒数千条消息进行优化，CPU 开销极小。
 * 🧬 **数据归一化：** 将原始二进制数据包转换为标准化的 JSON/Protobuf 格式。
 * 🛡️ **缓冲式交付：** 在数据库临时中断或网络峰值期间确保零数据丢失。
@@ -40,7 +40,7 @@
 ```mermaid
 flowchart LR
     CAN["CAN Bus Traffic"] --> COLL["TELEMETRY-COLLECTOR"]
-    WS["WS / gRPC Streams"] --> COLL
+    WS["WebSocket Streams"] --> COLL
     COLL --> PARSE["Packet Parser & Norm"]
     PARSE --> BUF["High-Speed Buffer"]
     BUF --> LAKE["HYDRA-UMC-DATALAKE"]

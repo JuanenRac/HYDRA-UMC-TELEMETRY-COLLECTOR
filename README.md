@@ -10,20 +10,20 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Language-Go%20%2F%20Rust-orange.svg" alt="Go/Rust">
-  <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20gRPC%20%2F%20WS-yellow.svg" alt="Protocol">
+  <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Go">
+  <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
 ---
 
 ## 1. 🛠️ TECHNICAL OVERVIEW
 
-**HYDRA-UMC-TELEMETRY-COLLECTOR** is the high-speed gateway that captures all raw communication within the ecosystem. It listens to the FDCAN buses, WebSocket streams, and gRPC updates, funneling the data into the Datalake.
+**HYDRA-UMC-TELEMETRY-COLLECTOR** is the high-speed gateway that captures all raw communication within the ecosystem. It listens to the FDCAN buses and WebSocket streams, funneling the data into the Datalake.
 
 It performs real-time parsing and normalization of heterogeneous data sources, ensuring that a motor current spike on a CAN bus is correctly correlated with an AI inference result from a Vision Node.
 
 ### Key Features:
-* 🚀 **Multi-Protocol Ingestion:** Handles CAN, WebSocket, gRPC, and HTTP telemetry.
+* 🚀 **Multi-Protocol Ingestion:** Handles CAN and WebSocket telemetry today, over a plain HTTP ingest API. *(gRPC ingestion is planned)*
 * ⚡ **High Throughput:** Optimized for thousands of messages per millisecond with minimal CPU overhead.
 * 🧬 **Data Normalization:** Translates raw binary packets into standardized JSON/Protobuf formats.
 * 🛡️ **Buffered Delivery:** Ensures zero data loss during temporary database outages or network spikes.
@@ -38,7 +38,7 @@ It performs real-time parsing and normalization of heterogeneous data sources, e
 ```mermaid
 flowchart LR
     CAN["CAN Bus Traffic"] --> COLL["TELEMETRY-COLLECTOR"]
-    WS["WS / gRPC Streams"] --> COLL
+    WS["WebSocket Streams"] --> COLL
     COLL --> PARSE["Packet Parser & Norm"]
     PARSE --> BUF["High-Speed Buffer"]
     BUF --> LAKE["HYDRA-UMC-DATALAKE"]

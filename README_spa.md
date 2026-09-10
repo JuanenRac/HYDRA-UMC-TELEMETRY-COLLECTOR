@@ -10,20 +10,20 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Lenguaje-Go%20%2F%20Rust-orange.svg" alt="Go/Rust">
-  <img src="https://img.shields.io/badge/Protocolo-CAN%20%2F%20gRPC%20%2F%20WS-yellow.svg" alt="Protocol">
+  <img src="https://img.shields.io/badge/Lenguaje-Go-orange.svg" alt="Go">
+  <img src="https://img.shields.io/badge/Protocolo-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
 ---
 
 ## 1. 🛠️ VISIÓN GENERAL TÉCNICA
 
-**HYDRA-UMC-TELEMETRY-COLLECTOR** es la puerta de enlace de alta velocidad que captura toda la comunicación bruta dentro del ecosistema. Escucha los buses FDCAN, los flujos WebSocket y las actualizaciones gRPC, canalizando los datos hacia el Datalake.
+**HYDRA-UMC-TELEMETRY-COLLECTOR** es la puerta de enlace de alta velocidad que captura toda la comunicación bruta dentro del ecosistema. Escucha los buses FDCAN y los flujos WebSocket, canalizando los datos hacia el Datalake.
 
 Realiza el parseo y la normalización en tiempo real de fuentes de datos heterogéneas, asegurando que un pico de corriente de motor en un bus CAN esté correctamente correlacionado con un resultado de inferencia de IA de un Nodo Vision.
 
 ### Características Clave:
-* 🚀 **Ingesta Multi-Protocolo:** Maneja telemetría CAN, WebSocket, gRPC y HTTP.
+* 🚀 **Ingesta Multi-Protocolo:** Maneja telemetría CAN y WebSocket hoy, sobre una API de ingesta HTTP simple. *(la ingesta gRPC está planeada)*
 * ⚡ **Alto Rendimiento:** Optimizado para miles de mensajes por milisegundo con un overhead de CPU mínimo.
 * 🧬 **Normalización de Datos:** Traduce paquetes binarios brutos a formatos estandarizados JSON/Protobuf.
 * 🛡️ **Entrega Bufferizada:** Asegura la pérdida de datos cero durante fallos temporales de base de datos o picos de red.
@@ -38,7 +38,7 @@ Realiza el parseo y la normalización en tiempo real de fuentes de datos heterog
 ```mermaid
 flowchart LR
     CAN["Tráfico del Bus CAN"] --> COLL["TELEMETRY-COLLECTOR"]
-    WS["Flujos WS / gRPC"] --> COLL
+    WS["Flujos WebSocket"] --> COLL
     COLL --> PARSE["Parser de Paquetes y Norm"]
     PARSE --> BUF["Buffer de Alta Velocidad"]
     BUF --> LAKE["HYDRA-UMC-DATALAKE"]
