@@ -125,7 +125,7 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 // newer) rather than lost - this is the actual mechanism behind "zero
 // data loss during temporary outages", not just a comment saying so.
 //
-// TEL-01 (found in an ecosystem-wide software-improvements audit, P1):
+// TEL-01 (P1):
 // that used to include a sample the sink PERMANENTLY rejected as invalid
 // (HTTP 400) - requeuing it put it right back at the front of the queue,
 // where the very next flush attempted it again, failed the identical
@@ -148,8 +148,8 @@ func (c *Collector) FlushOnce(batchSize int) int {
 	}
 	if err := c.sink.Write(batch); err != nil {
 		c.flushErrors.Add(1)
-		// A real, honest distinction for diagnosis (promotion audit line
-		// 665-666): did the SINK reject this exact data (retrying the
+		// A real, honest distinction for diagnosis: did the SINK reject
+		// this exact data (retrying the
 		// identical bytes won't help), or did the write fail for a
 		// transport reason (network/timeout/5xx, where a retry might
 		// genuinely succeed)?

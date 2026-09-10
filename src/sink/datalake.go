@@ -26,9 +26,9 @@ import (
 // content as invalid (a real HTTP 400) - as opposed to a transport-level
 // failure (network error, timeout, 5xx) where retrying the identical
 // bytes might genuinely succeed later. A distinct type so a caller can
-// tell the two apart for real diagnosis (promotion audit line 665-666).
+// tell the two apart for real diagnosis.
 //
-// TEL-01 (found in an ecosystem-wide software-improvements audit, P1):
+// TEL-01 (P1):
 // Index is this sample's own position within the batch Write() was
 // given - set by Write() itself right before returning, since writeOne()
 // has no notion of "batch position". collector.go's FlushOnce uses it to

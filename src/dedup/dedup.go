@@ -5,7 +5,7 @@
 // Real per-producer sequence deduplication with a bounded reorder
 // window - the mechanism behind "a device that reconnects and resends
 // its last few unacked messages doesn't inflate ingest counts or
-// re-buffer the same sample twice" (promotion audit line 661-662).
+// re-buffer the same sample twice".
 package dedup
 
 import "sync"
