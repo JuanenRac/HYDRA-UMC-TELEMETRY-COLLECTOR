@@ -10,8 +10,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Language-Go%20%2F%20Rust-orange.svg" alt="Go/Rust">
-  <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20gRPC%20%2F%20WS-yellow.svg" alt="Protocol">
+  <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Go">
+  <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
 ---
@@ -19,15 +19,15 @@
 ## 1. 🛠️ 技術概要
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** は、エコシステム内のすべての生の通信
-を捕捉する高速ゲートウェイです。FDCAN バス、WebSocket ストリーム、
-gRPC の更新を監視し、データをデータレイクへと流し込みます。
+を捕捉する高速ゲートウェイです。FDCAN バスと WebSocket ストリームを
+監視し、データをデータレイクへと流し込みます。
 
 異種データソースのリアルタイムな解析と正規化を行い、CAN バス上の
 モーター電流のスパイクが、ビジョンノードからの AI 推論結果と正しく
 相関付けられることを保証します。
 
 ### 主な機能：
-* 🚀 **マルチプロトコル取り込み：** CAN、WebSocket、gRPC、HTTP のテレメトリを処理します。
+* 🚀 **マルチプロトコル取り込み：** 現時点では CAN と WebSocket のテレメトリを、シンプルな HTTP 取り込み API 経由で処理します。*(gRPC 取り込みは計画中)*
 * ⚡ **高スループット：** 最小限の CPU オーバーヘッドで、1 ミリ秒あたり数千メッセージ向けに最適化。
 * 🧬 **データ正規化：** 生のバイナリパケットを標準化された JSON/Protobuf 形式に変換します。
 * 🛡️ **バッファ付き配信：** データベースの一時的な停止やネットワークスパイク時にもデータ損失をゼロに保ちます。
@@ -42,7 +42,7 @@ gRPC の更新を監視し、データをデータレイクへと流し込みま
 ```mermaid
 flowchart LR
     CAN["CAN Bus Traffic"] --> COLL["TELEMETRY-COLLECTOR"]
-    WS["WS / gRPC Streams"] --> COLL
+    WS["WebSocket Streams"] --> COLL
     COLL --> PARSE["Packet Parser & Norm"]
     PARSE --> BUF["High-Speed Buffer"]
     BUF --> LAKE["HYDRA-UMC-DATALAKE"]
