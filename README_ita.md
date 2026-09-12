@@ -14,6 +14,8 @@
   <img src="https://img.shields.io/badge/Protocollo-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
+**Controllo di onestà - cosa funziona davvero oggi:** la vera pipeline di ingestione - `telemetry` che analizza frame CAN e JSON WebSocket in un `Sample` normalizzato, l'anello a capacità limitata con segnalazione di contropressione di `buffer`, l'orchestrazione ingestione+flush di `collector` (una scrittura fallita verso il sink rimette in coda l'intero batch invece di perderlo), il tracciamento della sequenza per produttore resistente alla riconnessione di `dedup`, e il vero `DatalakeSink` di `sink` (testato contro un vero `net/http/httptest.Server` che implementa il `POST /ingest` proprio di DATALAKE) o il suo fallback `ConsoleSink` - sono tutti reali e testati (48 test, `go test ./...`). Due vere lacune da conoscere prima di integrare: questo collector non apre da sé una connessione reale a un bus FDCAN fisico né accetta connessioni WebSocket live da un robot - l'ingestione avviene tramite la sua semplice API HTTP (`POST /ingest/can`, `POST /ingest/ws`), quindi qualcos'altro deve ancora leggere il vero bus/socket e inoltrare qui i frame. E il formato di frame CAN proprio di `telemetry/can.go` (byte del codice segnale + valore float32) è una convenzione v0 propria e autodichiarata di questo progetto, non ancora le vere tabelle di ID CAN documentate dall'ecosistema nel firmware proprio di HYDRA-UMC/URTC - deliberatamente non indovinate. L'output è solo JSON reale; il "JSON/Protobuf" dello stesso README e l'ingestione gRPC restano pianificati, non implementati in nessuna parte di questo codice. Vedi `CHANGELOG.md` per ciò che è stato consegnato esattamente finora.
+
 ---
 
 ## 1. 🛠️ PANORAMICA TECNICA
@@ -25,7 +27,7 @@ Esegue il parsing e la normalizzazione in tempo reale di fonti di dati eterogene
 ### Caratteristiche principali:
 * 🚀 **Ingestione multi-protocollo:** Gestisce la telemetria CAN e WebSocket oggi, tramite una semplice API di ingestione HTTP. *(l'ingestione gRPC è pianificata)*
 * ⚡ **Alto throughput:** Ottimizzato per migliaia di messaggi al millisecondo con un sovraccarico minimo della CPU.
-* 🧬 **Normalizzazione dei dati:** Traduce i pacchetti binari grezzi in formati JSON/Protobuf standardizzati.
+* 🧬 **Normalizzazione dei dati:** Traduce i pacchetti binari grezzi in un formato JSON standardizzato. *(l'output Protobuf è pianificato, non implementato)*
 * 🛡️ **Consegna bufferizzata:** Garantisce la perdita zero di dati durante interruzioni temporanee del database o picchi di rete.
 * 🔁 **Deduplicazione sicura in caso di riconnessione:** Un numero di sequenza opzionale per produttore, tracciato in una finestra di riordino limitata, così che un dispositivo che si riconnette e reinvia i suoi ultimi messaggi non confermati non gonfi mai i conteggi di ingestione. *(implementato)*
 * 🩺 **Diagnosi reale dei fallimenti:** Ogni fallimento di flush viene classificato come un rifiuto genuino dei dati da parte del sink rispetto a un problema di trasporto - esposto in `GET /stats` per una reale visibilità operativa. *(implementato)*
