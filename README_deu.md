@@ -14,6 +14,8 @@
   <img src="https://img.shields.io/badge/Protokoll-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
+**Ehrlichkeitscheck - was heute wirklich läuft:** die echte Ingestion-Pipeline - `telemetry`, das CAN-Frames und WebSocket-JSON in ein normalisiertes `Sample` parst, der begrenzte Ring mit Rückstau-Meldung von `buffer`, die Ingest+Flush-Orchestrierung von `collector` (ein fehlgeschlagener Sink-Schreibvorgang reiht den gesamten Batch erneut ein, statt ihn zu verlieren), die wiederverbindungssichere Sequenznachverfolgung pro Produzent von `dedup`, und der echte `DatalakeSink` von `sink` (getestet gegen einen echten `net/http/httptest.Server`, der DATALAKEs eigenen `POST /ingest` implementiert) oder dessen `ConsoleSink`-Fallback - sind alle real und getestet (48 Tests, `go test ./...`). Zwei echte Lücken, die man vor der Integration kennen sollte: dieser Collector öffnet selbst keine echte Verbindung zu einem physischen FDCAN-Bus und akzeptiert keine echten WebSocket-Live-Verbindungen von einem Roboter - die Ingestion erfolgt über seine eigene einfache HTTP-API (`POST /ingest/can`, `POST /ingest/ws`), etwas anderes muss den echten Bus/Socket also noch lesen und Frames hierher weiterleiten. Und das eigene CAN-Frame-Format von `telemetry/can.go` (Signal-Code-Byte + float32-Wert) ist eine eigene, selbst erklärte v0-Konvention dieses Projekts, noch nicht die tatsächlichen, vom Ökosystem dokumentierten CAN-ID-Tabellen aus der eigenen Firmware von HYDRA-UMC/URTC - bewusst nicht geraten. Die Ausgabe ist nur echtes JSON; das eigene "JSON/Protobuf" des READMEs und die gRPC-Ingestion sind weiterhin geplant, nirgendwo in diesem Code implementiert. Siehe `CHANGELOG.md` für das, was bisher genau ausgeliefert wurde.
+
 ---
 
 ## 1. 🛠️ TECHNISCHER ÜBERBLICK
@@ -25,7 +27,7 @@ Es führt Echtzeit-Parsing und Normalisierung heterogener Datenquellen durch und
 ### Hauptmerkmale:
 * 🚀 **Multi-Protokoll-Ingestion:** Verarbeitet heute CAN- und WebSocket-Telemetrie über eine einfache HTTP-Ingest-API. *(gRPC-Ingestion ist geplant)*
 * ⚡ **Hoher Durchsatz:** Optimiert für Tausende von Nachrichten pro Millisekunde mit minimalem CPU-Overhead.
-* 🧬 **Daten-Normalisierung:** Übersetzt rohe Binärpakete in standardisierte JSON/Protobuf-Formate.
+* 🧬 **Daten-Normalisierung:** Übersetzt rohe Binärpakete in ein standardisiertes JSON-Format. *(Protobuf-Ausgabe ist geplant, nicht implementiert)*
 * 🛡️ **Gepufferte Zustellung:** Gewährleistet null Datenverlust bei vorübergehenden Datenbankausfällen oder Netzwerkspitzen.
 * 🔁 **Reconnect-sichere Deduplizierung:** Eine optionale Sequenznummer pro Produzent, verfolgt in einem begrenzten Reorder-Fenster, sodass ein Gerät, das sich neu verbindet und seine letzten unbestätigten Nachrichten erneut sendet, die Ingest-Zählungen niemals aufbläht. *(implementiert)*
 * 🩺 **Echte Fehlerdiagnose:** Jeder Flush-Fehler wird klassifiziert als echte Ablehnung der Daten durch den Sink gegenüber einem Transportproblem - offengelegt in `GET /stats` für echte operative Sichtbarkeit. *(implementiert)*

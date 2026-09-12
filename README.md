@@ -14,6 +14,8 @@
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
+**Honesty check - what actually runs today:** the real ingestion pipeline - `telemetry` parsing CAN frames and WebSocket JSON into a normalized `Sample`, `buffer`'s bounded backpressure-reporting ring, `collector`'s ingest+flush orchestration (a failed sink write requeues the whole batch instead of losing it), `dedup`'s reconnect-safe per-producer sequence tracking, and `sink`'s real `DatalakeSink` (tested against a real `net/http/httptest.Server` implementing DATALAKE's own `POST /ingest`) or `ConsoleSink` fallback - are all real and tested (48 tests, `go test ./...`). Two real gaps worth knowing before integrating: this collector does not itself open a live connection to a physical FDCAN bus or accept live WebSocket connections from a robot - ingestion happens over its own plain HTTP API (`POST /ingest/can`, `POST /ingest/ws`), so something else still needs to read the real bus/socket and forward frames here. And `telemetry/can.go`'s own CAN wire format (signal-code byte + float32 value) is this project's own self-declared v0 placeholder convention, not yet the ecosystem's actual documented CAN ID tables from HYDRA-UMC's/URTC's own firmware - deliberately not guessed at. Output is real JSON only; the README's own "JSON/Protobuf" and gRPC ingestion are still planned, not implemented anywhere in this codebase. See `CHANGELOG.md` for exactly what has shipped so far.
+
 ---
 
 ## 1. 🛠️ TECHNICAL OVERVIEW
@@ -25,7 +27,7 @@ It performs real-time parsing and normalization of heterogeneous data sources, e
 ### Key Features:
 * 🚀 **Multi-Protocol Ingestion:** Handles CAN and WebSocket telemetry today, over a plain HTTP ingest API. *(gRPC ingestion is planned)*
 * ⚡ **High Throughput:** Optimized for thousands of messages per millisecond with minimal CPU overhead.
-* 🧬 **Data Normalization:** Translates raw binary packets into standardized JSON/Protobuf formats.
+* 🧬 **Data Normalization:** Translates raw binary packets into a standardized JSON format. *(Protobuf output is planned, not implemented)*
 * 🛡️ **Buffered Delivery:** Ensures zero data loss during temporary database outages or network spikes.
 * 🔁 **Reconnect-Safe Deduplication:** An optional per-producer sequence number, tracked in a bounded reorder window, so a device that reconnects and resends its last few unacked messages never inflates ingest counts. *(implemented)*
 * 🩺 **Real Failure Diagnosis:** Every flush failure is classified as the sink genuinely rejecting the data vs. a transport problem - exposed in `GET /stats` for real operational visibility. *(implemented)*
