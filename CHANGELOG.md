@@ -47,6 +47,28 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.1.1] - H037: a rejected-for-full-buffer sample can now actually be retried
+
+- `ingest()` used to call `dedup.Allow` and, separately, `buf.Push` right
+  after - `Allow` committed the sequence as permanently seen the instant
+  it returned true, entirely independent of whether the following
+  `buf.Push` then actually succeeded. A full buffer meant the sample was
+  dropped, but dedup's own state still said "already buffered" - a
+  legitimate retry of the exact same sample (a producer backing off after
+  the 503 a full buffer causes and resending) was rejected as a duplicate
+  forever, permanent silent data loss for a producer doing everything
+  right.
+- Add `dedup.Tracker.AllowThen`: holds the tracker's own lock across the
+  whole check-then-buffer-then-commit decision, only marking a sequence
+  as seen once the caller's own accept (the real buffer push) succeeds.
+  Also closes a concurrency gap: two producers racing the identical
+  (sourceId, sequence) can no longer both be told "yes, new" while the
+  buffer disagrees about what actually got persisted.
+- Add real regression coverage confirmed to fail without the fix and
+  pass with it: the exact fill/reject/free-capacity/retry sequence the
+  finding's own acceptance criteria describes, plus the same scenario
+  repeated with concurrent producers racing for the same sample.
+
 ## [0.1.0] - A permanently-rejected sample no longer blocks the queue forever (TEL-01)
 
 A real gap (P1):

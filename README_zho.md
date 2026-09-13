@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
 </p>
 
-**诚实核查 - 今天真正能运行的部分：** 真实的摄取管道——`telemetry` 将 CAN 帧和 WebSocket JSON 解析为规范化的 `Sample`、`buffer` 带有背压报告的有界环形缓冲区、`collector` 的摄取+刷新编排(向下游写入失败时会将整批数据重新排队而不是丢弃)、`dedup` 的可重连安全的按生产者序列号跟踪，以及 `sink` 真实的 `DatalakeSink`(针对实现了 DATALAKE 自身 `POST /ingest` 的真实 `net/http/httptest.Server` 测试过)或其 `ConsoleSink` 回退方案——这些都是真实的并经过测试(48 个测试，`go test ./...`)。在集成前需要了解的两个真实缺口：本采集器本身并不打开到物理 FDCAN 总线的真实连接，也不接受来自机器人的实时 WebSocket 连接——摄取是通过其自身的简单 HTTP API(`POST /ingest/can`、`POST /ingest/ws`)完成的，因此仍需要有其他组件读取真实总线/套接字并将帧转发到这里。而且 `telemetry/can.go` 自身的 CAN 帧格式(信号代码字节 + float32 值)是本项目自行声明的 v0 占位约定，尚不是生态系统在 HYDRA-UMC/URTC 自身固件中真正记录的 CAN ID 表——刻意没有去猜测。输出目前只有真实的 JSON；README 自身提到的"JSON/Protobuf"以及 gRPC 摄取仍处于计划阶段，本代码库中任何地方都尚未实现。具体已交付的内容请见 `CHANGELOG.md`。
+**诚实核查 - 今天真正能运行的部分：** 真实的摄取管道——`telemetry` 将 CAN 帧和 WebSocket JSON 解析为规范化的 `Sample`、`buffer` 带有背压报告的有界环形缓冲区、`collector` 的摄取+刷新编排(向下游写入失败时会将整批数据重新排队而不是丢弃)、`dedup` 的可重连安全的按生产者序列号跟踪，以及 `sink` 真实的 `DatalakeSink`(针对实现了 DATALAKE 自身 `POST /ingest` 的真实 `net/http/httptest.Server` 测试过)或其 `ConsoleSink` 回退方案——这些都是真实的并经过测试(50 个测试，`go test ./...`)。在集成前需要了解的两个真实缺口：本采集器本身并不打开到物理 FDCAN 总线的真实连接，也不接受来自机器人的实时 WebSocket 连接——摄取是通过其自身的简单 HTTP API(`POST /ingest/can`、`POST /ingest/ws`)完成的，因此仍需要有其他组件读取真实总线/套接字并将帧转发到这里。而且 `telemetry/can.go` 自身的 CAN 帧格式(信号代码字节 + float32 值)是本项目自行声明的 v0 占位约定，尚不是生态系统在 HYDRA-UMC/URTC 自身固件中真正记录的 CAN ID 表——刻意没有去猜测。输出目前只有真实的 JSON；README 自身提到的"JSON/Protobuf"以及 gRPC 摄取仍处于计划阶段，本代码库中任何地方都尚未实现。具体已交付的内容请见 `CHANGELOG.md`。
 
 ---
 
