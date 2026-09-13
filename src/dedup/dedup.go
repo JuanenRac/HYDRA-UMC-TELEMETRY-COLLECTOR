@@ -39,14 +39,11 @@ func New(window int) *Tracker {
 	return &Tracker{window: uint64(window), sources: make(map[string]*sourceState)}
 }
 
-// Allow reports whether `sequence` from `sourceID` is real, new data.
-// false means "already seen, or too stale behind this source's own
-// high-water mark to trust" - the caller should treat it as a duplicate
-// and not re-buffer it.
-func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
+// checkLocked reports whether `sequence` is real, new data for
+// `sourceID` - the SAME rule Allow/AllowThen both enforce, factored out
+// so the two never drift apart. Caller must already hold t.mu. Never
+// mutates state - see commitLocked for the half that does.
+func (t *Tracker) checkLocked(sourceID string, sequence uint64) (*sourceState, bool) {
 	st, ok := t.sources[sourceID]
 	if !ok {
 		st = &sourceState{seen: make(map[uint64]struct{}, t.window)}
@@ -54,15 +51,23 @@ func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
 	}
 
 	if _, dup := st.seen[sequence]; dup {
-		return false
+		return st, false
 	}
 	if st.maxSeen > 0 && sequence+t.window <= st.maxSeen {
 		// Outside the reorder window behind what we've already
 		// accepted - a real replay of old data, not a legitimately
 		// late arrival.
-		return false
+		return st, false
 	}
+	return st, true
+}
 
+// commitLocked records `sequence` as seen and advances/prunes the
+// reorder window - the mutating half checkLocked deliberately leaves
+// out, so a caller (AllowThen) can skip it entirely when whatever it
+// meant to do with an allowed sequence didn't actually happen. Caller
+// must already hold t.mu.
+func (t *Tracker) commitLocked(st *sourceState, sequence uint64) {
 	st.seen[sequence] = struct{}{}
 	if sequence > st.maxSeen {
 		st.maxSeen = sequence
@@ -75,5 +80,67 @@ func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
 			}
 		}
 	}
+}
+
+// Allow reports whether `sequence` from `sourceID` is real, new data.
+// false means "already seen, or too stale behind this source's own
+// high-water mark to trust" - the caller should treat it as a duplicate
+// and not re-buffer it. A true result is committed immediately -
+// collector.go does NOT use this directly anymore for exactly the
+// reason AllowThen's own header comment explains (H037); kept for any
+// caller that genuinely wants "check and immediately commit" as one
+// step (and every existing unit test in this package already assumes
+// this exact behavior).
+func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	st, ok := t.checkLocked(sourceID, sequence)
+	if !ok {
+		return false
+	}
+	t.commitLocked(st, sequence)
 	return true
+}
+
+// AllowThen is Allow, except a real new sequence is only committed as
+// seen once `accept` (the caller's own downstream side effect - here,
+// always collector.go's `c.buf.Push(s)`) actually succeeds.
+//
+// H037: `ingest()` used to call plain Allow() and, separately and
+// unconditionally, buf.Push() right after. Allow() had ALREADY marked
+// the sequence as permanently seen the moment it returned true -
+// completely independent of whether the following buf.Push() itself
+// then succeeded. A full buffer meant Push() returned ErrFull and the
+// sample was dropped, but dedup's own state still said "already
+// buffered". A legitimate retry of the EXACT SAME sample (the producer
+// backing off and resending after the 503 api.go turns ErrFull into)
+// arrived with the identical (sourceID, sequence) and was rejected as
+// ErrDuplicate forever - the sample was never persisted on the first
+// attempt (buffer full) NOR on any later retry (falsely "already seen"),
+// permanent silent data loss despite the producer doing everything right.
+//
+// Holding t.mu for the ENTIRE check-then-accept-then-commit sequence
+// also closes a real concurrency gap the acceptance criteria calls out
+// explicitly: two producers racing the identical (sourceID, sequence)
+// can no longer both be told "yes, new, go ahead" and both persist a
+// copy - the second one through this same lock always sees the first's
+// now-committed mark, exactly like any other duplicate.
+func (t *Tracker) AllowThen(sourceID string, sequence uint64, accept func() error) (allowed bool, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	st, ok := t.checkLocked(sourceID, sequence)
+	if !ok {
+		return false, nil
+	}
+	if err := accept(); err != nil {
+		// A real, new sequence - but the caller's own downstream accept
+		// failed (a full buffer, most commonly). Nothing committed:
+		// the exact same (sourceID, sequence) retried later sees the
+		// identical "not yet seen" state and can succeed then.
+		return true, err
+	}
+	t.commitLocked(st, sequence)
+	return true, nil
 }

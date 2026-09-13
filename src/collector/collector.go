@@ -108,11 +108,28 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 	// Sequence == 0 means "not provided" (see telemetry.Sample) - a
 	// producer that doesn't send sequence numbers is never deduplicated,
 	// matching pre-dedup behavior exactly.
-	if s.Sequence != 0 && !c.dedup.Allow(s.SourceID, s.Sequence) {
+	if s.Sequence == 0 {
+		if err := c.buf.Push(s); err != nil {
+			return err
+		}
+		c.ingested.Add(1)
+		return nil
+	}
+	// H037: AllowThen (not the plain Allow+buf.Push done separately, as
+	// this used to be) only commits the sequence as seen once buf.Push
+	// itself actually succeeds - see that method's own header comment
+	// for the real, permanent data-loss bug this closes (a sample
+	// rejected once for a full buffer could never be accepted on any
+	// later retry, since dedup had already marked it "seen" regardless
+	// of whether it was ever really buffered).
+	allowed, err := c.dedup.AllowThen(s.SourceID, s.Sequence, func() error {
+		return c.buf.Push(s)
+	})
+	if !allowed {
 		c.duplicates.Add(1)
 		return ErrDuplicate
 	}
-	if err := c.buf.Push(s); err != nil {
+	if err != nil {
 		return err
 	}
 	c.ingested.Add(1)

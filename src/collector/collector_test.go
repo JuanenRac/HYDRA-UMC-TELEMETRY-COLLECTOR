@@ -192,6 +192,152 @@ func TestCollector_DuplicateSequenceIsRejectedNotBuffered(t *testing.T) {
 	}
 }
 
+// H037: the collector's own acceptance criteria, reproduced exactly -
+// fill the buffer, get rejected, free capacity, retry the IDENTICAL
+// sample - it must persist exactly once. Before the fix, dedup.Allow()
+// marked the sequence as seen the moment it returned true, regardless
+// of whether the buf.Push() right after it actually succeeded - a full
+// buffer meant the sample was dropped AND permanently blocked from ever
+// being accepted on a later retry (rejected as ErrDuplicate forever),
+// silent, permanent data loss for a producer that did everything right.
+func TestCollector_RetryAfterBufferFullEventuallyPersistsExactlyOnce(t *testing.T) {
+	s := &memorySink{}
+	c := New(1, s) // capacity 1 - the second ingest below has nowhere to go
+
+	if err := c.IngestWS(wsMessageWithSeq("robot-1", 1)); err != nil {
+		t.Fatalf("first ingest (fills the buffer): %v", err)
+	}
+
+	// Fill: the buffer is now full. This ingest must be rejected for
+	// being full, NOT for being a duplicate - it has never been seen
+	// before.
+	err := c.IngestWS(wsMessageWithSeq("robot-1", 2))
+	if err == nil || errors.Is(err, ErrDuplicate) {
+		t.Fatalf("ingest into a full buffer: err = %v, want a real buffer-full error, not ErrDuplicate", err)
+	}
+
+	// Free capacity: flush the first sample out.
+	if n := c.FlushOnce(10); n != 1 {
+		t.Fatalf("FlushOnce = %d, want 1", n)
+	}
+	if c.BufferLen() != 0 {
+		t.Fatalf("BufferLen() = %d, want 0 after freeing capacity", c.BufferLen())
+	}
+
+	// Retry: the EXACT SAME sample (sourceId=robot-1, sequence=2) that
+	// was rejected above. This is the real bug - it used to come back
+	// ErrDuplicate forever, even though it was never actually buffered
+	// the first time.
+	if err := c.IngestWS(wsMessageWithSeq("robot-1", 2)); err != nil {
+		t.Fatalf("retry after freeing capacity: err = %v, want nil - the sample was never actually persisted the first time", err)
+	}
+	if c.BufferLen() != 1 {
+		t.Fatalf("BufferLen() = %d, want 1 after the retry succeeds", c.BufferLen())
+	}
+
+	if n := c.FlushOnce(10); n != 1 {
+		t.Fatalf("final FlushOnce = %d, want 1", n)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	total := 0
+	for _, batch := range s.written {
+		total += len(batch)
+	}
+	if total != 2 {
+		t.Fatalf("sink received %d samples total across %+v, want exactly 2 (seq 1 once, seq 2 once)", total, s.written)
+	}
+}
+
+// H037's own explicit second half: repeat with concurrent producers. N
+// goroutines race to ingest the IDENTICAL (sourceId, sequence) sample
+// while the buffer is genuinely full of something ELSE - proving the old
+// code's real concurrency gap, not just its single-goroutine version
+// above. Under the OLD code, plain dedup.Allow() committed the sequence
+// as seen the instant the FIRST of these concurrent goroutines won its
+// own internal mutex, entirely independent of whether that goroutine's
+// own buf.Push() then succeeded - every OTHER concurrent goroutine
+// racing the identical sequence at nearly the same moment saw
+// Allow()==false (already marked) and returned ErrDuplicate immediately,
+// without ever even attempting Push. So under the old code this phase
+// produces exactly 1 real "buffer full" error plus (attempts-1)
+// ErrDuplicate - and phase 2 below then finds EVERY retry permanently
+// blocked as a false duplicate, zero successes. AllowThen's lock
+// spanning the whole check-then-buffer-then-commit decision fixes both:
+// phase 1 must produce real errors from every goroutine (none committed
+// early), and phase 2 must produce exactly one real success once there's
+// finally room.
+func TestCollector_ConcurrentProducersOfTheSameSampleNeverPersistMoreThanOnce(t *testing.T) {
+	s := &memorySink{}
+	c := New(1, s) // capacity 1, and about to be filled by something else entirely
+
+	if err := c.IngestWS(wsMessageWithSeq("robot-other", 1)); err != nil {
+		t.Fatalf("filling the only slot with an unrelated sample: %v", err)
+	}
+
+	const attempts = 20
+	var wg sync.WaitGroup
+	results := make([]error, attempts)
+	wg.Add(attempts)
+	for i := 0; i < attempts; i++ {
+		go func(i int) {
+			defer wg.Done()
+			results[i] = c.IngestWS(wsMessageWithSeq("robot-1", 7))
+		}(i)
+	}
+	wg.Wait()
+
+	// Phase 1: the buffer is full of the UNRELATED sample above, not of
+	// this sequence - every one of these concurrent attempts is a
+	// genuinely new sequence being told "no room", not an actual
+	// duplicate. None may be prematurely marked as seen.
+	for i, err := range results {
+		if err == nil || errors.Is(err, ErrDuplicate) {
+			t.Fatalf("attempt %d during phase 1 (buffer genuinely full): err = %v, want a real buffer-full error, never nil or ErrDuplicate", i, err)
+		}
+	}
+
+	// Free capacity: drain the unrelated sample.
+	if n := c.FlushOnce(10); n != 1 {
+		t.Fatalf("FlushOnce = %d, want 1", n)
+	}
+	if c.BufferLen() != 0 {
+		t.Fatalf("BufferLen() = %d, want 0 after freeing capacity", c.BufferLen())
+	}
+
+	// Phase 2: M concurrent RETRIES of the exact same sample that was
+	// rejected above, racing for the single free slot. Exactly one must
+	// win and actually persist; the rest are now genuinely duplicates of
+	// that real winner (not of a phantom commit that never happened).
+	const retries = 10
+	var wg2 sync.WaitGroup
+	retryResults := make([]error, retries)
+	wg2.Add(retries)
+	for i := 0; i < retries; i++ {
+		go func(i int) {
+			defer wg2.Done()
+			retryResults[i] = c.IngestWS(wsMessageWithSeq("robot-1", 7))
+		}(i)
+	}
+	wg2.Wait()
+
+	successes := 0
+	for i, err := range retryResults {
+		if err == nil {
+			successes++
+		} else if !errors.Is(err, ErrDuplicate) {
+			t.Fatalf("retry %d: unexpected error %v, want nil (the winner) or ErrDuplicate", i, err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successes = %d across %d concurrent identical retries, want exactly 1", successes, retries)
+	}
+	if c.BufferLen() != 1 {
+		t.Fatalf("BufferLen() = %d, want 1 - the same sample must never be buffered twice under a race", c.BufferLen())
+	}
+}
+
 func TestCollector_RealDisconnectReconnectResendIsDeduplicated(t *testing.T) {
 	// The real scenario handled here: a device sends
 	// sequences 1-3, the connection drops before it receives acks, it
