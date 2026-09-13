@@ -47,6 +47,20 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.1.2] - Real sustained-reconnection coverage (50 cycles) for dedup's own reorder window
+
+- New `TestCollector_FiftySustainedReconnectCyclesNeverLeakOrMisbehave`:
+  50 simulated disconnect/reconnect cycles against the same device (300
+  total new sequences, comfortably past `dedup`'s own 256-sequence
+  reorder window) - every other reconnect test in this repo only ever
+  exercised a single disconnect/reconnect. Proves the window's own
+  prune-as-you-go bookkeeping (`commitLocked`'s `floor` deletion) stays
+  correct across many successive prunes, and that the tracker is still
+  genuinely alive and functional after sustained churn. Confirmed to
+  fail (a real duplicate wrongly accepted) against a deliberately
+  widened `floor` calculation, restored before committing.
+- 51/51 `go test ./...` pass; `go vet ./...` and `go build ./...` clean.
+
 ## [0.1.1] - H037: a rejected-for-full-buffer sample can now actually be retried
 
 - `ingest()` used to call `dedup.Allow` and, separately, `buf.Push` right
