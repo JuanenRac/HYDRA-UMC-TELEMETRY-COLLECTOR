@@ -377,6 +377,63 @@ func TestCollector_RealDisconnectReconnectResendIsDeduplicated(t *testing.T) {
 	}
 }
 
+func TestCollector_FiftySustainedReconnectCyclesNeverLeakOrMisbehave(t *testing.T) {
+	// Real long-session/reconnection coverage (previously absent
+	// anywhere in this repo - every other reconnect test here, including
+	// the one right above, only ever exercises ONE disconnect/reconnect).
+	// 50 simulated cycles against the same device, each sending a few
+	// genuinely new sequences then "reconnecting" and resending its own
+	// last two as a real device unsure what already got through would -
+	// 300 total new sequences, comfortably past dedup's own 256-sequence
+	// reorder window (see dedup.go's dedupWindow), so this also proves
+	// the window's own prune-as-you-go bookkeeping (commitLocked's
+	// `floor` deletion) stays correct across many successive prunes, not
+	// just the one or two a short test exercises.
+	s := &memorySink{}
+	c := New(1000, s) // large enough that only dedup longevity, not buffer capacity, is under test here (see the H037 tests above for that interaction)
+
+	const cycles = 50
+	const newPerCycle = 6
+	var seq uint64
+	var wantIngested, wantDuplicates int64
+
+	for cycle := 0; cycle < cycles; cycle++ {
+		for i := 0; i < newPerCycle; i++ {
+			seq++
+			if err := c.IngestWS(wsMessageWithSeq("robot-1", seq)); err != nil {
+				t.Fatalf("cycle %d: genuinely new sequence %d: %v", cycle, seq, err)
+			}
+			wantIngested++
+		}
+		// "Reconnect": unsure whether its last 2 messages of this cycle
+		// were acked, the device resends them before continuing.
+		for _, resend := range []uint64{seq - 1, seq} {
+			if err := c.IngestWS(wsMessageWithSeq("robot-1", resend)); !errors.Is(err, ErrDuplicate) {
+				t.Fatalf("cycle %d: resend of sequence %d after reconnect: err = %v, want ErrDuplicate", cycle, resend, err)
+			}
+			wantDuplicates++
+		}
+	}
+
+	stats := c.Stats()
+	if stats.Ingested != wantIngested {
+		t.Fatalf("after %d cycles: Ingested = %d, want %d - dedup state must never inflate or lose a real sample across a sustained series", cycles, stats.Ingested, wantIngested)
+	}
+	if stats.Duplicates != wantDuplicates {
+		t.Fatalf("after %d cycles: Duplicates = %d, want %d", cycles, stats.Duplicates, wantDuplicates)
+	}
+	if c.BufferLen() != int(wantIngested) {
+		t.Fatalf("BufferLen() = %d, want %d - one buffered copy of each real sample, none lost or duplicated across the sustained series", c.BufferLen(), wantIngested)
+	}
+
+	// The tracker must still be genuinely alive and functional after all
+	// that churn, not latched into some stuck bad state.
+	seq++
+	if err := c.IngestWS(wsMessageWithSeq("robot-1", seq)); err != nil {
+		t.Fatalf("final genuinely-new sequence %d after %d sustained cycles: %v", seq, cycles, err)
+	}
+}
+
 func TestCollector_SamplesWithoutSequenceAreNeverDeduplicated(t *testing.T) {
 	// Sequence 0 ("not provided") must behave exactly like before dedup
 	// existed - a producer that doesn't opt in isn't affected.
