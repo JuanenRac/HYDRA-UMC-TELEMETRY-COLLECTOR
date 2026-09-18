@@ -151,3 +151,57 @@ func TestHandleStats_MethodNotAllowed(t *testing.T) {
 		t.Fatalf("status = %d, want 405 for POST /stats", rec.Code)
 	}
 }
+
+// Real round trip: ingest one sample (so ingested_total has a genuine
+// non-zero value to check, not just a zeroed metric catalog), then
+// scrape GET /metrics and confirm it's real Prometheus text exposition
+// format (# HELP/# TYPE lines, then "<name> <value>") carrying that same
+// live counter - not just a 200 with an empty body.
+func TestHandleMetrics_ExposesRealCountersInPrometheusFormat(t *testing.T) {
+	c := collector.New(10, &memorySink{})
+	s := New(c)
+
+	body := []byte(`{"sourceId":"robot-1","kind":"motor_temp","timestamp":1700000000000,"fields":{"value":1}}`)
+	req := httptest.NewRequest(http.MethodPost, "/ingest/ws", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("POST /ingest/ws status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec2 := httptest.NewRecorder()
+	s.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("GET /metrics status = %d, want 200", rec2.Code)
+	}
+	ct := rec2.Header().Get("Content-Type")
+	if !bytes.HasPrefix([]byte(ct), []byte("text/plain")) {
+		t.Fatalf("Content-Type = %q, want a real text/plain Prometheus exposition type", ct)
+	}
+	text := rec2.Body.String()
+	for _, want := range []string{
+		"# HELP hydra_umc_telemetry_collector_ingested_total ",
+		"# TYPE hydra_umc_telemetry_collector_ingested_total counter",
+		"hydra_umc_telemetry_collector_ingested_total 1",
+		"# TYPE hydra_umc_telemetry_collector_dropped_total counter",
+		"hydra_umc_telemetry_collector_dropped_total 0",
+		"# TYPE hydra_umc_telemetry_collector_buffer_length gauge",
+		"hydra_umc_telemetry_collector_buffer_length 1",
+	} {
+		if !bytes.Contains([]byte(text), []byte(want)) {
+			t.Fatalf("GET /metrics body missing %q; got:\n%s", want, text)
+		}
+	}
+}
+
+func TestHandleMetrics_MethodNotAllowed(t *testing.T) {
+	c := collector.New(10, &memorySink{})
+	s := New(c)
+	req := httptest.NewRequest(http.MethodPost, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405 for POST /metrics", rec.Code)
+	}
+}

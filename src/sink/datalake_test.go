@@ -201,3 +201,44 @@ func TestDatalakeSink_InvalidDataErrorNamesTheRealBatchIndex(t *testing.T) {
 		t.Fatalf("Sample.SourceID = %q, want %q", invalid.Sample.SourceID, "poison")
 	}
 }
+
+// A transport-level failure (5xx here, same shape a real outage or a
+// network blip produces) must report the real number of samples DATALAKE
+// already gave a genuine 202 for, via PartialWriteError.Succeeded - this
+// is what lets collector.go's own FlushOnce requeue only the real
+// unattempted remainder instead of the whole batch (which used to resend
+// the already-accepted prefix again on retry and land duplicate rows in
+// DATALAKE).
+func TestDatalakeSink_TransportFailureReportsHowManySucceeded(t *testing.T) {
+	var mu sync.Mutex
+	callCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		callCount++
+		n := callCount
+		mu.Unlock()
+		if n == 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+
+	sink := NewDatalakeSink(server.URL)
+	batch := []telemetry.Sample{
+		{SourceID: "a", Kind: "k", Timestamp: 1, Fields: map[string]float64{"v": 1}},
+		{SourceID: "b", Kind: "k", Timestamp: 2, Fields: map[string]float64{"v": 2}},
+		{SourceID: "c", Kind: "k", Timestamp: 3, Fields: map[string]float64{"v": 3}},
+		{SourceID: "d", Kind: "k", Timestamp: 4, Fields: map[string]float64{"v": 4}},
+	}
+
+	partial, ok := AsPartialWrite(sink.Write(batch))
+	if !ok {
+		t.Fatal("expected a real *PartialWriteError for the 3rd sample's 500")
+	}
+	if partial.Succeeded != 2 {
+		t.Fatalf("Succeeded = %d, want 2 (samples a and b really did get a 202 before c failed)", partial.Succeeded)
+	}
+}

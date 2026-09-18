@@ -71,20 +71,59 @@ func AsInvalidData(err error) (*InvalidDataError, bool) {
 	return nil, false
 }
 
+// PartialWriteError wraps a real transport-level Write() failure
+// (network error, timeout, non-2xx/non-400 status) with Succeeded: the
+// real number of samples at the FRONT of the batch DatalakeSink's own
+// per-sample loop had already gotten a genuine HTTP 202 for before the
+// request at index Succeeded failed. This IS the real partial-success
+// signal DATALAKE's own API provides - it has no batch /ingest endpoint
+// at all (see api.py's own single-sample POST /ingest), so there is no
+// JSON field to read; the loop's own position, captured at the moment it
+// fails, is the actual, accurate account of what was and wasn't
+// confirmed written.
+//
+// collector.go's own FlushOnce uses this to requeue only
+// batch[Succeeded:] - the samples the sink never got to attempt - instead
+// of the WHOLE batch, which used to re-send every already-written sample
+// again on the very next retry, landing as a duplicate row in DATALAKE
+// for each one.
+type PartialWriteError struct {
+	Err       error
+	Succeeded int
+}
+
+func (e *PartialWriteError) Error() string { return e.Err.Error() }
+func (e *PartialWriteError) Unwrap() error { return e.Err }
+
+// AsPartialWrite extracts the real *PartialWriteError from err (or
+// something it wraps), if there is one - same idiom as AsInvalidData.
+// A Sink implementation that doesn't return this (a generic error, or
+// any Sink other than DatalakeSink) has no accurate partial-success
+// signal to offer, so the caller must fall back to the same safe
+// whole-batch requeue this project always used before this type existed.
+func AsPartialWrite(err error) (*PartialWriteError, bool) {
+	var partial *PartialWriteError
+	if errors.As(err, &partial) {
+		return partial, true
+	}
+	return nil, false
+}
+
 // DatalakeSink writes each sample to a real HYDRA-UMC-DATALAKE instance's
 // POST /ingest, one HTTP request per sample - DATALAKE's own API is
 // single-sample (see its own api.py), so a "batch write" here is really
 // N real requests, not one.
 //
-// Honest limitation, not silently glossed over: if a batch partially
-// succeeds before a request fails, Write returns an error and
-// collector.go requeues the WHOLE batch (see collector.go's own
-// all-or-nothing contract for Sink) - the already-written samples get
-// re-sent on retry, landing as duplicate rows in DATALAKE rather than
-// being lost. Exactly-once delivery (idempotency keys, upserts on the
-// DATALAKE side) is real future work, not attempted here.
-// At-least-once with occasional duplicates on a
-// real outage is the honest v0 trade-off, not at-most-once (silently
+// A transport-level failure (network error, timeout, unexpected status)
+// partway through a batch is wrapped in a *PartialWriteError carrying
+// Succeeded (how many requests at the front of the batch already got a
+// real 202) - collector.go's own FlushOnce uses that to requeue only the
+// real, still-unattempted remainder, not the whole batch. Exactly-once
+// delivery (idempotency keys, upserts on the DATALAKE side) is still real
+// future work; a duplicate row can still happen if DATALAKE itself
+// accepted a request (202) but this process crashed/lost the response
+// before recording that - at-least-once with rare duplicates on a real
+// crash mid-flush is the honest v0 trade-off, not at-most-once (silently
 // dropping data on a retry).
 type DatalakeSink struct {
 	// BaseURL is the DATALAKE instance's address, e.g. "http://localhost:8095".
@@ -105,17 +144,24 @@ func NewDatalakeSink(baseURL string) *DatalakeSink {
 func (d *DatalakeSink) Write(batch []telemetry.Sample) error {
 	for i, s := range batch {
 		if err := d.writeOne(s); err != nil {
+			wrapped := fmt.Errorf("sink: datalake: sample %d/%d (sourceId=%q kind=%q): %w",
+				i+1, len(batch), s.SourceID, s.Kind, err)
 			// TEL-01: writeOne() has no notion of "batch position" - stamp
 			// it here, where i is known, so collector.go can quarantine
 			// exactly this one sample instead of the whole batch. err is
 			// the direct, unwrapped return value of writeOne() at this
-			// point (the fmt.Errorf %w wrap happens below), so a plain
+			// point (the fmt.Errorf %w wrap happens above), so a plain
 			// type assertion is enough - no errors.As needed yet.
 			if invalid, ok := err.(*InvalidDataError); ok {
 				invalid.Index = i
+				return wrapped
 			}
-			return fmt.Errorf("sink: datalake: sample %d/%d (sourceId=%q kind=%q): %w",
-				i+1, len(batch), s.SourceID, s.Kind, err)
+			// Every request before index i already got a real HTTP 202
+			// from DATALAKE (writeOne() only returns nil on that, and the
+			// loop only reaches i by way of every earlier iteration
+			// returning nil) - i itself is the real, accurate count of
+			// confirmed-written samples, not a guess.
+			return &PartialWriteError{Err: wrapped, Succeeded: i}
 		}
 	}
 	return nil

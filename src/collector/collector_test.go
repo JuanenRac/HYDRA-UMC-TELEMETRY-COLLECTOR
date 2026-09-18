@@ -548,6 +548,82 @@ func TestCollector_GenericSinkFailureIsClassifiedAsTransport(t *testing.T) {
 	}
 }
 
+// partialFailureSink is a real Sink standing in for DatalakeSink's own
+// per-sample loop: it genuinely records every sample up to (and
+// excluding) FailAt, then returns a real *sink.PartialWriteError naming
+// exactly how many really got written - the same signal the real
+// DatalakeSink now reports on a transport-level failure partway through
+// a batch.
+type partialFailureSink struct {
+	mu      sync.Mutex
+	FailAt  int // batch index that fails; -1 = never fails
+	written []telemetry.Sample
+}
+
+func (s *partialFailureSink) Write(batch []telemetry.Sample) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, sample := range batch {
+		if i == s.FailAt {
+			return &sink.PartialWriteError{Err: errors.New("simulated transport failure"), Succeeded: i}
+		}
+		s.written = append(s.written, sample)
+	}
+	return nil
+}
+
+// This is the real regression PartialWriteError exists to fix: a batch
+// of 3 where the sink genuinely wrote the first 2 before failing on the
+// 3rd must only requeue that 1 unwritten sample, never resend the 2
+// already-confirmed ones - the whole-batch requeue this project used to
+// do unconditionally would have landed robot-1/robot-2 as duplicate rows
+// in DATALAKE on the very next retry.
+func TestCollector_TransportFailureRequeuesOnlyTheUnwrittenRemainder(t *testing.T) {
+	s := &partialFailureSink{FailAt: 2}
+	c := New(10, s)
+
+	for _, id := range []string{"robot-1", "robot-2", "robot-3"} {
+		if err := c.IngestWS(wsMessage(id)); err != nil {
+			t.Fatalf("ingest %s: %v", id, err)
+		}
+	}
+
+	n := c.FlushOnce(10)
+	if n != 0 {
+		t.Fatalf("FlushOnce returned %d, want 0", n)
+	}
+	if c.BufferLen() != 1 {
+		t.Fatalf("BufferLen() = %d, want 1 - only robot-3 (never attempted) should still be queued", c.BufferLen())
+	}
+
+	// Recover: stop failing, then flush the requeued remainder.
+	s.mu.Lock()
+	s.FailAt = -1
+	s.mu.Unlock()
+	n = c.FlushOnce(10)
+	if n != 1 {
+		t.Fatalf("FlushOnce after recovery returned %d, want 1", n)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.written) != 3 {
+		t.Fatalf("sink recorded %d samples total, want exactly 3 - robot-1/robot-2 must never be re-sent as duplicates", len(s.written))
+	}
+	ids := []string{s.written[0].SourceID, s.written[1].SourceID, s.written[2].SourceID}
+	if ids[0] != "robot-1" || ids[1] != "robot-2" || ids[2] != "robot-3" {
+		t.Fatalf("sink recorded %+v, want [robot-1 robot-2 robot-3] with no duplicates", ids)
+	}
+
+	stats := c.Stats()
+	if stats.TransportErrors != 1 {
+		t.Fatalf("TransportErrors = %d, want 1", stats.TransportErrors)
+	}
+	if stats.Dropped != 0 {
+		t.Fatalf("Dropped = %d, want 0 - there was room to requeue the 1 real remainder", stats.Dropped)
+	}
+}
+
 func TestQuarantineSample(t *testing.T) {
 	batch := []telemetry.Sample{
 		{SourceID: "a"}, {SourceID: "b"}, {SourceID: "c"},
