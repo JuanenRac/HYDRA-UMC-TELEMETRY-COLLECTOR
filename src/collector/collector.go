@@ -137,10 +137,11 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 }
 
 // FlushOnce drains up to batchSize samples and writes them to the sink.
-// On a sink failure, the whole batch is requeued at the front of the
-// buffer (oldest-first, so a later flush retries it before anything
-// newer) rather than lost - this is the actual mechanism behind "zero
-// data loss during temporary outages", not just a comment saying so.
+// On a sink failure, the unwritten part of the batch is requeued at the
+// front of the buffer (oldest-first, so a later flush retries it before
+// anything newer) rather than lost - this is the actual mechanism behind
+// "zero data loss during temporary outages", not just a comment saying
+// so.
 //
 // TEL-01 (P1):
 // that used to include a sample the sink PERMANENTLY rejected as invalid
@@ -152,9 +153,16 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 // When the sink identifies exactly which sample it rejected (see
 // sink.InvalidDataError's own Index field), that one sample is dropped
 // (quarantined, counted in Stats().Quarantined - never silently) and the
-// REST of the batch is still requeued normally; only a transport-level
-// failure (or a sink that can't identify the offending sample) still
-// requeues the whole batch as before.
+// REST of the batch is still requeued normally.
+//
+// A plain transport-level failure used to requeue the WHOLE batch
+// unconditionally, including whatever prefix DatalakeSink's own
+// per-sample loop had already gotten a real 202 for - that prefix got
+// resent on the very next retry and landed as a duplicate row in
+// DATALAKE. sink.PartialWriteError now reports exactly how far the loop
+// got (see its own header comment), so only the real, never-attempted
+// remainder is requeued; a Sink that can't offer that signal still falls
+// back to the whole batch, the same safe default as before.
 //
 // Returns the number of samples actually flushed (0 on failure or an
 // empty buffer).
@@ -181,7 +189,25 @@ func (c *Collector) FlushOnce(batchSize int) int {
 			return 0
 		}
 		c.transportErrors.Add(1)
-		dropped := c.buf.Requeue(batch)
+		// TEL-XX: a real partial-success signal - DatalakeSink's own
+		// per-sample loop reports exactly how many samples at the front
+		// of the batch already got a genuine HTTP 202 before the
+		// transport failure (see sink.PartialWriteError's own header
+		// comment; DATALAKE's real /ingest API is single-sample, so this
+		// loop position IS the partial-success signal, there is no batch
+		// JSON field to read instead). Only the real, never-attempted
+		// remainder needs a retry - requeuing the already-written prefix
+		// too would just resend it and land as a duplicate row in
+		// DATALAKE. A Sink that can't offer this signal (a generic error,
+		// any Sink other than DatalakeSink) falls back to the same
+		// whole-batch requeue this project always used before this type
+		// existed - the safe default when "how much already succeeded"
+		// genuinely isn't known.
+		toRequeue := batch
+		if partial, ok := sink.AsPartialWrite(err); ok && partial.Succeeded >= 0 && partial.Succeeded <= len(batch) {
+			toRequeue = batch[partial.Succeeded:]
+		}
+		dropped := c.buf.Requeue(toRequeue)
 		if dropped > 0 {
 			c.dropped.Add(int64(dropped))
 		}

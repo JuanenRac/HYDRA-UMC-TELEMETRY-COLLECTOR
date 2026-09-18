@@ -18,12 +18,24 @@ semantic-versioning judgment calls:
 
 ---
 
-## Unreleased - finite telemetry field validation
+## [0.1.3] - Partial-batch requeue, Prometheus metrics, finite field validation
 
-- Rejects empty field names and `NaN`/infinite numeric values before they
-  reach the buffer or an external sink. CAN decoding now performs the same
-  validation as JSON ingestion, so malformed sensor payloads fail at the
-  protocol boundary instead of becoming a delayed downstream error.
+- **Partial-batch requeue on a transport failure:** a failed `DatalakeSink`
+  write used to requeue the WHOLE batch, including whatever prefix had
+  already gotten a real `202` from DATALAKE before the failure - that
+  prefix got resent on the very next retry and landed as a duplicate row.
+  `DatalakeSink.Write()` now returns a `*PartialWriteError` reporting
+  exactly how far its own per-sample loop got; `FlushOnce` requeues only
+  the real, never-attempted remainder. A `Sink` that can't offer that
+  signal still falls back to the same safe whole-batch requeue as before.
+- **`GET /metrics`:** exposes the same live ingestion/drop-rate counters
+  `GET /stats` already tracks, in real Prometheus text exposition format -
+  no new dependency, stdlib `fmt.Fprintf` only.
+- **Finite telemetry field validation:** rejects empty field names and
+  `NaN`/infinite numeric values before they reach the buffer or an
+  external sink. CAN decoding now performs the same validation as JSON
+  ingestion, so malformed sensor payloads fail at the protocol boundary
+  instead of becoming a delayed downstream error.
 - **`main.go`**'s `-addr` flag now defaults to `127.0.0.1:8092` instead of
   `:8092` - an unqualified port binds every interface, and this HTTP API
   (`POST /ingest/can`, `POST /ingest/ws`, `GET /stats`) has no
