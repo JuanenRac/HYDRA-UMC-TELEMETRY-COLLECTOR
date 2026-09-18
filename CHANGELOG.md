@@ -73,7 +73,7 @@ semantic-versioning judgment calls:
   widened `floor` calculation, restored before committing.
 - 51/51 `go test ./...` pass; `go vet ./...` and `go build ./...` clean.
 
-## [0.1.1] - H037: a rejected-for-full-buffer sample can now actually be retried
+## [0.1.1] - A rejected-for-full-buffer sample can now actually be retried
 
 - `ingest()` used to call `dedup.Allow` and, separately, `buf.Push` right
   after - `Allow` committed the sequence as permanently seen the instant
