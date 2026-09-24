@@ -106,3 +106,51 @@ func TestRing_ConcurrentPushIsSafe(t *testing.T) {
 		t.Fatalf("Len() = %d, want 100 after 100 concurrent pushes", r.Len())
 	}
 }
+
+func kindSample(kind string, ts int64) telemetry.Sample {
+	return telemetry.Sample{SourceID: "s", Kind: kind, Timestamp: ts, Fields: map[string]float64{"v": 1}}
+}
+
+func TestPriority_AFullRingDropsTheLeastImportantOldestSampleForAMoreImportantOne(t *testing.T) {
+	r := New(3)
+	r.SetPriority(PriorityByKind(map[string]int{"safety": 10, "motor_temp": 5}, 1))
+	for i, kind := range []string{"debug", "motor_temp", "debug"} {
+		if err := r.Push(kindSample(kind, int64(i+1))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.Push(kindSample("safety", 4)); err != nil {
+		t.Fatalf("a more important sample must make room: %v", err)
+	}
+	if r.Evicted() != 1 {
+		t.Fatalf("evicted = %d, want 1", r.Evicted())
+	}
+	got := r.Drain(10)
+	if len(got) != 3 || got[0].Timestamp != 2 || got[1].Timestamp != 3 || got[2].Kind != "safety" {
+		t.Fatalf("unexpected contents (the oldest debug sample should have gone): %+v", got)
+	}
+}
+
+func TestPriority_ASampleNoMoreImportantThanAnythingQueuedIsRejected(t *testing.T) {
+	r := New(2)
+	r.SetPriority(PriorityByKind(map[string]int{"safety": 10}, 1))
+	_ = r.Push(kindSample("safety", 1))
+	_ = r.Push(kindSample("safety", 2))
+	if err := r.Push(kindSample("debug", 3)); err != ErrFull {
+		t.Fatalf("expected ErrFull, got %v", err)
+	}
+	if err := r.Push(kindSample("safety", 4)); err != ErrFull {
+		t.Fatalf("an equal-priority sample must not evict: %v", err)
+	}
+	if r.Evicted() != 0 {
+		t.Fatalf("nothing should have been evicted, got %d", r.Evicted())
+	}
+}
+
+func TestPriority_WithoutAPolicyAFullRingStillRejectsWithErrFull(t *testing.T) {
+	r := New(1)
+	_ = r.Push(kindSample("debug", 1))
+	if err := r.Push(kindSample("safety", 2)); err != ErrFull {
+		t.Fatalf("expected ErrFull, got %v", err)
+	}
+}

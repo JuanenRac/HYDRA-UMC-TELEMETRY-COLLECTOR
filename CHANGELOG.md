@@ -18,6 +18,14 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.1.4] - A full buffer can drop the least important sample first
+
+- `buffer.Ring.SetPriority` installs an optional drop policy: when the ring is full, a more
+  important sample evicts the least important queued one (oldest among equals); a sample no
+  more important than anything queued is still rejected with `ErrFull`. `PriorityByKind`
+  builds the policy from a kind table and `Evicted()` counts what was dropped. Without a
+  policy nothing changes: a full ring rejects the newcomer. Three new tests.
+
 ## [0.1.3] - Partial-batch requeue, Prometheus metrics, finite field validation
 
 - **Partial-batch requeue on a transport failure:** a failed `DatalakeSink`

@@ -27,6 +27,39 @@ type Ring struct {
 	mu       sync.Mutex
 	items    []telemetry.Sample
 	capacity int
+	// priority, when set, lets a full buffer make room for a more important
+	// sample by dropping the least important one already queued (oldest
+	// first among equals). Nil keeps the plain behaviour: a full buffer
+	// rejects the newcomer with ErrFull.
+	priority func(telemetry.Sample) int
+	evicted  int
+}
+
+// SetPriority installs the drop policy: higher numbers matter more. Safe to
+// call before the ring is used; a nil function restores plain FIFO backpressure.
+func (r *Ring) SetPriority(priority func(telemetry.Sample) int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.priority = priority
+}
+
+// Evicted is how many queued samples were dropped to make room for a more
+// important one since this ring was created.
+func (r *Ring) Evicted() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.evicted
+}
+
+// PriorityByKind builds a priority function from a kind -> priority table;
+// kinds not in the table get `otherwise`.
+func PriorityByKind(table map[string]int, otherwise int) func(telemetry.Sample) int {
+	return func(s telemetry.Sample) int {
+		if p, ok := table[s.Kind]; ok {
+			return p
+		}
+		return otherwise
+	}
 }
 
 // New returns an empty Ring that holds at most `capacity` samples.
@@ -46,7 +79,21 @@ func (r *Ring) Push(s telemetry.Sample) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(r.items) >= r.capacity {
-		return ErrFull
+		if r.priority == nil {
+			return ErrFull
+		}
+		// Find the least important queued sample (the oldest among equals).
+		lowest := 0
+		for i := 1; i < len(r.items); i++ {
+			if r.priority(r.items[i]) < r.priority(r.items[lowest]) {
+				lowest = i
+			}
+		}
+		if r.priority(s) <= r.priority(r.items[lowest]) {
+			return ErrFull // the newcomer is no more important than anything queued
+		}
+		r.items = append(r.items[:lowest], r.items[lowest+1:]...)
+		r.evicted++
 	}
 	r.items = append(r.items, s)
 	return nil
