@@ -47,7 +47,7 @@ type Stats struct {
 	TransportErrors   int64 // flush failures from a transport-level problem (network, timeout, 5xx) - retrying may help
 	Dropped           int64 // samples lost because a requeue outran buffer capacity
 	// Quarantined counts samples permanently discarded because the sink
-	// itself rejected their exact content as invalid (TEL-01) - unlike
+	// itself rejected their exact content as invalid - unlike
 	// Dropped (a byproduct of a full buffer during a transient outage),
 	// these were never going to succeed no matter how many times they
 	// were retried, so they are reported here instead of silently
@@ -115,7 +115,7 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 		c.ingested.Add(1)
 		return nil
 	}
-	// H037: AllowThen (not the plain Allow+buf.Push done separately, as
+	// AllowThen (not the plain Allow+buf.Push done separately, as
 	// this used to be) only commits the sequence as seen once buf.Push
 	// itself actually succeeds - see that method's own header comment
 	// for the real, permanent data-loss bug this closes (a sample
@@ -143,7 +143,7 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 // "zero data loss during temporary outages", not just a comment saying
 // so.
 //
-// TEL-01 (P1):
+// (P1):
 // that used to include a sample the sink PERMANENTLY rejected as invalid
 // (HTTP 400) - requeuing it put it right back at the front of the queue,
 // where the very next flush attempted it again, failed the identical

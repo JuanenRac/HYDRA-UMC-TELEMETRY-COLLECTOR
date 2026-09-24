@@ -28,7 +28,7 @@ import (
 // bytes might genuinely succeed later. A distinct type so a caller can
 // tell the two apart for real diagnosis.
 //
-// TEL-01 (P1):
+// (P1):
 // Index is this sample's own position within the batch Write() was
 // given - set by Write() itself right before returning, since writeOne()
 // has no notion of "batch position". collector.go's FlushOnce uses it to
@@ -59,7 +59,7 @@ func IsInvalidData(err error) bool {
 }
 
 // AsInvalidData extracts the real *InvalidDataError from err (or
-// something it wraps), if there is one. TEL-01: collector.go uses this
+// something it wraps), if there is one. collector.go uses this
 // instead of the plain bool IsInvalidData so it can read Index and
 // quarantine exactly the one sample that will never succeed, rather than
 // the whole batch.
@@ -146,7 +146,7 @@ func (d *DatalakeSink) Write(batch []telemetry.Sample) error {
 		if err := d.writeOne(s); err != nil {
 			wrapped := fmt.Errorf("sink: datalake: sample %d/%d (sourceId=%q kind=%q): %w",
 				i+1, len(batch), s.SourceID, s.Kind, err)
-			// TEL-01: writeOne() has no notion of "batch position" - stamp
+			// writeOne has no notion of "batch position" - stamp
 			// it here, where i is known, so collector.go can quarantine
 			// exactly this one sample instead of the whole batch. err is
 			// the direct, unwrapped return value of writeOne() at this
