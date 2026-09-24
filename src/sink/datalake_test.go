@@ -160,7 +160,7 @@ func TestDatalakeSink_StopsAtFirstFailureInABatch(t *testing.T) {
 	}
 }
 
-// TEL-01 (P1):
+// (P1):
 // collector.go's per-sample quarantine depends entirely on
 // InvalidDataError.Index correctly naming this sample's real position in
 // the batch Write() was given, not just which HTTP call number it was.

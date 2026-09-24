@@ -87,7 +87,7 @@ func (t *Tracker) commitLocked(st *sourceState, sequence uint64) {
 // high-water mark to trust" - the caller should treat it as a duplicate
 // and not re-buffer it. A true result is committed immediately -
 // collector.go does NOT use this directly anymore for exactly the
-// reason AllowThen's own header comment explains (H037); kept for any
+// reason AllowThen's own header comment explains; kept for any
 // caller that genuinely wants "check and immediately commit" as one
 // step (and every existing unit test in this package already assumes
 // this exact behavior).
@@ -107,7 +107,7 @@ func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
 // seen once `accept` (the caller's own downstream side effect - here,
 // always collector.go's `c.buf.Push(s)`) actually succeeds.
 //
-// H037: `ingest()` used to call plain Allow() and, separately and
+// `ingest` used to call plain Allow and, separately and
 // unconditionally, buf.Push() right after. Allow() had ALREADY marked
 // the sequence as permanently seen the moment it returned true -
 // completely independent of whether the following buf.Push() itself

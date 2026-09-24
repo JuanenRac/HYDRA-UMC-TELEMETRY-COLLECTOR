@@ -53,7 +53,7 @@ func wsMessageWithSeq(sourceID string, seq uint64) []byte {
 // single-purpose behavior. Set PoisonSourceID to reject one specific
 // sample instead, wherever it actually lands in the batch - the real
 // DatalakeSink identifies the bad sample by content, not by a hardcoded
-// position, and TEL-01's own fix depends on that Index being accurate.
+// position, and this project's own fix depends on that Index being accurate.
 type invalidDataSink struct {
 	PoisonSourceID string
 }
@@ -192,7 +192,7 @@ func TestCollector_DuplicateSequenceIsRejectedNotBuffered(t *testing.T) {
 	}
 }
 
-// H037: the collector's own acceptance criteria, reproduced exactly -
+// the collector's own acceptance criteria, reproduced exactly -
 // fill the buffer, get rejected, free capacity, retry the IDENTICAL
 // sample - it must persist exactly once. Before the fix, dedup.Allow()
 // marked the sequence as seen the moment it returned true, regardless
@@ -250,7 +250,7 @@ func TestCollector_RetryAfterBufferFullEventuallyPersistsExactlyOnce(t *testing.
 	}
 }
 
-// H037's own explicit second half: repeat with concurrent producers. N
+// this project's own explicit second half: repeat with concurrent producers. N
 // goroutines race to ingest the IDENTICAL (sourceId, sequence) sample
 // while the buffer is genuinely full of something ELSE - proving the old
 // code's real concurrency gap, not just its single-goroutine version
@@ -390,7 +390,7 @@ func TestCollector_FiftySustainedReconnectCyclesNeverLeakOrMisbehave(t *testing.
 	// `floor` deletion) stays correct across many successive prunes, not
 	// just the one or two a short test exercises.
 	s := &memorySink{}
-	c := New(1000, s) // large enough that only dedup longevity, not buffer capacity, is under test here (see the H037 tests above for that interaction)
+	c := New(1000, s) // large enough that only dedup longevity, not buffer capacity, is under test here (see the tests above for that interaction)
 
 	const cycles = 50
 	const newPerCycle = 6
@@ -465,7 +465,7 @@ func TestCollector_InvalidDataFlushErrorIsClassifiedSeparatelyFromTransport(t *t
 	}
 }
 
-// TEL-01's own exact reproduction: a batch of [valid, POISONED, valid]
+// this project's own exact reproduction: a batch of [valid, POISONED, valid]
 // used to requeue the WHOLE batch on the sink's InvalidDataError,
 // putting the poisoned sample right back at the front - the next flush
 // failed identically, requeued identically, forever, and the two

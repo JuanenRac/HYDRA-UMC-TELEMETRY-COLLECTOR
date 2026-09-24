@@ -95,7 +95,7 @@ semantic-versioning judgment calls:
   finding's own acceptance criteria describes, plus the same scenario
   repeated with concurrent producers racing for the same sample.
 
-## [0.1.0] - A permanently-rejected sample no longer blocks the queue forever (TEL-01)
+## [0.1.0] - A permanently-rejected sample no longer blocks the queue forever
 
 A real gap (P1):
 
