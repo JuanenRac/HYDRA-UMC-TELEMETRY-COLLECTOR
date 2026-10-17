@@ -9,7 +9,14 @@ real caller (or a test/curl) feed the collector genuine frames without
 needing that hardware/network dependency, so the buffering/flush
 pipeline is proven with real data either way.
 
-No authentication - internal/same-network use.
+Authentication is optional. Started with a token (`-token`, or the
+`HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` environment variable; at least 16
+characters), the two `POST /ingest/*` routes require
+`Authorization: Bearer <token>` and answer `401` (`WWW-Authenticate: Bearer`)
+otherwise; `GET /stats` and `GET /metrics` stay open. Without a token the
+collector only starts on a loopback address: a non-loopback `-addr` is refused
+unless `-allow-anonymous` is passed. A request body larger than 1 MiB is
+refused with `413` and never read in full.
 
 ---
 
@@ -37,6 +44,8 @@ Ingests one raw CAN frame (this v0's own fixed 8-byte encoding - see [`telemetry
 | Status | Body | Meaning |
 |---|---|---|
 | 202 | `{"status": "buffered"}` | Frame parsed and pushed onto the internal ring buffer. |
+| 401 | `{"error": "a valid bearer token is required"}` | A token is configured and the request has no valid `Authorization: Bearer` header. |
+| 413 | `{"error": "the body may be at most 1048576 bytes"}` | The request body is larger than the cap. |
 | 400 | `{"error": "<message>"}` | Malformed JSON, `data` not exactly 8 bytes, an unknown signal type code, or a decoded value that fails `Sample.Validate()` (e.g. a non-finite float32). |
 | 503 | `{"error": "buffer: full"}` | The ring buffer has no room - real backpressure, not a silently dropped sample. |
 

@@ -4,7 +4,7 @@
 
 # 📡 HYDRA-UMC-TELEMETRY-COLLECTOR
 
-<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | 🇩🇪 <b>Deutsch</b> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a></p>
+<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | 🇩🇪 <b>Deutsch</b> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a> | <a href="README_por.md">🇵🇹 Português</a></p>
 
 ### 🚀 High-Throughput-Ingestion-Knoten für CAN- und WebSocket-Logs
 
@@ -72,6 +72,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── go.mod            # Modul-Definition
 │   ├── version.go        # const Version = "X.Y.Z"
 │   ├── main.go           # Einstiegspunkt: verbindet alles, startet die HTTP-API
+│   ├── guard.go        # Startwächter: nur Loopback, außer ein Bearer-Token ist gesetzt
 │   ├── telemetry/        # Sample-Typ + CAN/WebSocket-Parser (Normalisierung)
 │   ├── buffer/           # Begrenzte FIFO mit Gegendruck-Meldung (Ring)
 │   ├── dedup/            # Echte Deduplizierung per Sequenz pro Produzent (Reorder-Fenster)
@@ -124,6 +125,8 @@ an eine echte, laufende HYDRA-UMC-DATALAKE-Instanz (`POST /ingest`,
 `sink.DatalakeSink`) - wird es weggelassen, werden geleerte Samples
 stattdessen auf stdout ausgegeben (`sink.ConsoleSink`), nützlich um
 diesen Collector eigenständig auszuführen:
+
+Standardmäßig lauscht der Collector nur auf Loopback, und seine Ingest-Routen sind für lokale Aufrufer offen. Um auf einer Netzwerkadresse zu lauschen, braucht er ein Bearer-Token (`-token` oder `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`; mindestens 16 Zeichen): `POST /ingest/can` und `POST /ingest/ws` verlangen dann `Authorization: Bearer <token>` (`/stats` und `/metrics` bleiben offen, damit ein lokaler Scraper kein Geheimnis braucht). Ein `-addr` außerhalb von Loopback ohne Token wird beim Start abgelehnt, außer `-allow-anonymous` wird übergeben. Ein Anfragekörper ist auf 1 MiB begrenzt (darüber `413`), und der HTTP-Server setzt Timeouts für Lesen, Schreiben und Leerlauf.
 
 ```bash
 # Ein WebSocket-artiges Telemetrie-Sample einspeisen

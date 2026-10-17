@@ -12,23 +12,49 @@
 package api
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
 )
 
+// DefaultMaxBodyBytes caps one ingest request body. A sample is a few
+// hundred bytes; the cap is generous but bounded so a client cannot make
+// the collector buffer an arbitrarily large body.
+const DefaultMaxBodyBytes = 1 << 20
+
+// Options configures the optional protections of the HTTP surface. The zero
+// value is the original open behaviour (loopback-only deployments).
+type Options struct {
+	// Token, when set, must be presented as "Authorization: Bearer <token>" on
+	// the two ingest routes (the write path). /stats and /metrics stay open so
+	// a local scraper needs no secret.
+	Token string
+	// MaxBodyBytes caps one ingest body; zero means DefaultMaxBodyBytes.
+	MaxBodyBytes int64
+}
+
 type Server struct {
 	collector *collector.Collector
 	mux       *http.ServeMux
+	opts      Options
 }
 
 func New(c *collector.Collector) *Server {
-	s := &Server{collector: c, mux: http.NewServeMux()}
+	return NewWithOptions(c, Options{})
+}
+
+func NewWithOptions(c *collector.Collector, opts Options) *Server {
+	if opts.MaxBodyBytes <= 0 {
+		opts.MaxBodyBytes = DefaultMaxBodyBytes
+	}
+	s := &Server{collector: c, mux: http.NewServeMux(), opts: opts}
 	s.mux.HandleFunc("/ingest/can", s.handleIngestCAN)
 	s.mux.HandleFunc("/ingest/ws", s.handleIngestWS)
 	s.mux.HandleFunc("/stats", s.handleStats)
@@ -50,6 +76,48 @@ func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
 
+// authorized reports whether the request may use a write route. With no token
+// configured everything is allowed; otherwise the bearer token must match, and
+// the comparison takes the same time whatever prefix matched.
+func (s *Server) authorized(r *http.Request) bool {
+	if s.opts.Token == "" {
+		return true
+	}
+	scheme, presented, found := strings.Cut(r.Header.Get("Authorization"), " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(presented), []byte(s.opts.Token)) == 1
+}
+
+// guardIngest runs the checks every write route shares: the method, the token
+// and the body cap. It returns false after writing the response itself.
+func (s *Server) guardIngest(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("use POST"))
+		return false
+	}
+	if !s.authorized(r) {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		writeError(w, http.StatusUnauthorized, errors.New("a valid bearer token is required"))
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, s.opts.MaxBodyBytes)
+	return true
+}
+
+// bodyError maps a failed body read to 413 when the cap was hit and to 400
+// for any other malformed body.
+func bodyError(w http.ResponseWriter, err error) {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, fmt.Errorf("the body may be at most %d bytes", tooLarge.Limit))
+		return
+	}
+	writeError(w, http.StatusBadRequest, err)
+}
+
 // canFrameRequest mirrors one CAN frame for JSON transport - real
 // hardware delivers raw bytes on the wire, but there is no real bus to
 // listen to in this environment (see the package doc comment), so the
@@ -60,14 +128,12 @@ type canFrameRequest struct {
 }
 
 func (s *Server) handleIngestCAN(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "POST")
-		writeError(w, http.StatusMethodNotAllowed, errors.New("use POST"))
+	if !s.guardIngest(w, r) {
 		return
 	}
 	var req canFrameRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		bodyError(w, err)
 		return
 	}
 	if err := s.collector.IngestCAN(req.ArbitrationID, req.Data); err != nil {
@@ -86,14 +152,12 @@ func (s *Server) handleIngestCAN(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIngestWS(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "POST")
-		writeError(w, http.StatusMethodNotAllowed, errors.New("use POST"))
+	if !s.guardIngest(w, r) {
 		return
 	}
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		bodyError(w, err)
 		return
 	}
 	if err := s.collector.IngestWS(raw); err != nil {

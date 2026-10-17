@@ -44,7 +44,14 @@ func main() {
 	flushInterval := flag.Duration("flush-interval", 2*time.Second, "how often to flush buffered samples to the sink")
 	batchSize := flag.Int("batch-size", 500, "max samples per flush")
 	datalakeURL := flag.String("datalake-url", "", "HYDRA-UMC-DATALAKE base URL (e.g. http://localhost:8095) to write samples to; empty prints to stdout instead")
+	token := flag.String("token", os.Getenv(tokenEnv), "bearer token the ingest routes require (default: $"+tokenEnv+"); empty leaves them open")
+	allowAnonymous := flag.Bool("allow-anonymous", false, "allow a non-loopback -addr with no token (the ingest routes are then open to the whole network)")
 	flag.Parse()
+
+	if problem := startupProblem(*addr, *token, *allowAnonymous); problem != "" {
+		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
+		os.Exit(2)
+	}
 
 	fmt.Printf("%s v%s\n", projectName, Version)
 	fmt.Println(role)
@@ -59,7 +66,7 @@ func main() {
 	}
 
 	c := collector.New(*bufferCap, s)
-	server := api.New(c)
+	server := api.NewWithOptions(c, api.Options{Token: *token})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -70,7 +77,15 @@ func main() {
 		*addr, *bufferCap, *flushInterval, *batchSize)
 	fmt.Println("[telemetry-collector] POST /ingest/can, POST /ingest/ws, GET /stats")
 
-	httpServer := &http.Server{Addr: *addr, Handler: server}
+	httpServer := &http.Server{
+		Addr:              *addr,
+		Handler:           server,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+	}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

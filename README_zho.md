@@ -4,7 +4,7 @@
 
 # 📡 HYDRA-UMC-TELEMETRY-COLLECTOR
 
-<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | 🇨🇳 <b>简体中文</b> | <a href="README_jpn.md">🇯🇵 日本語</a></p>
+<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | 🇨🇳 <b>简体中文</b> | <a href="README_jpn.md">🇯🇵 日本語</a> | <a href="README_por.md">🇵🇹 Português</a></p>
 
 ### 🚀 面向 CAN 和 WebSocket 日志的高吞吐量摄取节点
 
@@ -75,6 +75,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── go.mod            # 模块定义
 │   ├── version.go        # const Version = "X.Y.Z"
 │   ├── main.go           # 入口点：连接一切，启动 HTTP API
+│   ├── guard.go        # 启动守卫：除非设置了 Bearer 令牌，否则仅限回环
 │   ├── telemetry/        # Sample 类型 + CAN/WebSocket 解析器（归一化）
 │   ├── buffer/           # 带背压报告的有界 FIFO（Ring）
 │   ├── dedup/            # 真实的按生产者序列号去重（重排序窗口）
@@ -124,6 +125,8 @@ run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 指向一个真实的、正在运行的 HYDRA-UMC-DATALAKE 实例（`POST /ingest`，
 `sink.DatalakeSink`）——省略该参数则改为将刷新的样本打印到 stdout
 （`sink.ConsoleSink`），便于独立运行该 collector：
+
+默认情况下，collector 只在回环地址上监听，其摄取路由对本地调用方开放。若要在网络地址上监听，必须为它提供 Bearer 令牌（`-token`，或 `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`；至少 16 个字符）：此时 `POST /ingest/can` 和 `POST /ingest/ws` 要求 `Authorization: Bearer <token>`（`/stats` 和 `/metrics` 保持开放，本地采集器无需任何密钥）。非回环的 `-addr` 若没有令牌，启动时会被拒绝，除非传入 `-allow-anonymous`。请求体上限为 1 MiB（超出返回 `413`），HTTP 服务器还会应用读取、写入和空闲超时。
 
 ```bash
 # 摄取一个 WebSocket 风格的遥测样本

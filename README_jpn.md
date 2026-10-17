@@ -4,7 +4,7 @@
 
 # 📡 HYDRA-UMC-TELEMETRY-COLLECTOR
 
-<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | 🇯🇵 <b>日本語</b></p>
+<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | 🇯🇵 <b>日本語</b> | <a href="README_por.md">🇵🇹 Português</a></p>
 
 ### 🚀 CAN および WebSocket ログ向けの高スループット取り込みノード
 
@@ -78,6 +78,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── go.mod            # モジュール定義
 │   ├── version.go        # const Version = "X.Y.Z"
 │   ├── main.go           # エントリポイント：すべてを接続し、HTTP API を起動
+│   ├── guard.go        # 起動ガード：Bearer トークンがない限りループバックのみ
 │   ├── telemetry/        # Sample 型 + CAN/WebSocket パーサー(正規化)
 │   ├── buffer/           # 背圧を報告する有界 FIFO(Ring)
 │   ├── dedup/            # 実際のプロデューサーごとのシーケンス重複排除(並べ替えウィンドウ)
@@ -130,6 +131,8 @@ run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 インスタンス（`POST /ingest`、`sink.DatalakeSink`）に向けます——
 省略した場合は、フラッシュされたサンプルを代わりに標準出力へ表示します
 （`sink.ConsoleSink`）。このコレクターを単独で実行する際に便利です：
+
+デフォルトでは、コレクターはループバックのみで待ち受け、取り込みルートはローカルの呼び出し元に開かれています。ネットワークアドレスで待ち受けるには、Bearer トークン（`-token`、または `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`。16文字以上）を指定します。すると `POST /ingest/can` と `POST /ingest/ws` は `Authorization: Bearer <token>` を要求します（`/stats` と `/metrics` は、ローカルのスクレイパーが秘密情報を必要としないよう開いたままです）。ループバック以外の `-addr` でトークンがない場合は、`-allow-anonymous` を渡さない限り起動時に拒否されます。リクエスト本文は 1 MiB に制限され（超えると `413`）、HTTP サーバーは読み取り・書き込み・アイドルのタイムアウトを適用します。
 
 ```bash
 # WebSocket 形式のテレメトリサンプルを取り込む

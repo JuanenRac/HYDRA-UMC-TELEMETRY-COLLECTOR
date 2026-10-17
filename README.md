@@ -4,7 +4,7 @@
 
 # 📡 HYDRA-UMC-TELEMETRY-COLLECTOR
 
-<p align="center">🇺🇸 <b>English</b> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a></p>
+<p align="center">🇺🇸 <b>English</b> | <a href="README_spa.md">🇪🇸 Español</a> | <a href="README_fra.md">🇫🇷 Français</a> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a> | <a href="README_por.md">🇵🇹 Português</a></p>
 
 ### 🚀 High-Throughput Ingestion Node for CAN and WebSocket Logs
 
@@ -73,6 +73,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── go.mod          # Module definition
 │   ├── version.go      # const Version = "X.Y.Z"
 │   ├── main.go         # Entry point: wires everything, starts the HTTP API
+│   ├── guard.go        # Startup guard: loopback-only unless a bearer token is set
 │   ├── telemetry/      # Sample type + CAN/WebSocket parsers (normalization)
 │   ├── buffer/         # Bounded, backpressure-reporting FIFO (Ring)
 │   ├── dedup/           # Real per-producer sequence deduplication (reorder window)
@@ -125,6 +126,8 @@ binary, forwarding any flags, and starts listening for real traffic.
 HYDRA-UMC-DATALAKE instance's `POST /ingest` (`sink.DatalakeSink`) -
 omit it to print flushed samples to stdout instead
 (`sink.ConsoleSink`), useful for running this collector standalone.
+
+By default the collector listens on loopback only and its ingest routes are open to local callers. To listen on a network address, give it a bearer token (`-token`, or `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`; at least 16 characters): `POST /ingest/can` and `POST /ingest/ws` then require `Authorization: Bearer <token>` (`/stats` and `/metrics` stay open so a local scraper needs no secret). A non-loopback `-addr` with no token is refused at startup unless `-allow-anonymous` is passed. A request body is capped at 1 MiB (`413` beyond it) and the HTTP server applies read, write and idle timeouts.
 
 ```bash
 # Ingest a WebSocket-style telemetry sample

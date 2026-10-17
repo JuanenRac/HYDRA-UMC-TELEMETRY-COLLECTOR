@@ -4,7 +4,7 @@
 
 # 📡 HYDRA-UMC-TELEMETRY-COLLECTOR
 
-<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | 🇫🇷 <b>Français</b> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a></p>
+<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | 🇫🇷 <b>Français</b> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a> | <a href="README_por.md">🇵🇹 Português</a></p>
 
 ### 🚀 Nœud d'ingestion à haut débit pour les journaux CAN et WebSocket
 
@@ -72,6 +72,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── go.mod            # Définition du module
 │   ├── version.go        # const Version = "X.Y.Z"
 │   ├── main.go           # Point d'entrée : relie tout, démarre l'API HTTP
+│   ├── guard.go        # Garde de démarrage : loopback uniquement sauf jeton Bearer
 │   ├── telemetry/        # Type Sample + analyseurs CAN/WebSocket (normalisation)
 │   ├── buffer/           # File FIFO bornée signalant la contre-pression (Ring)
 │   ├── dedup/            # Déduplication réelle par séquence par producteur (fenêtre de réordonnancement)
@@ -124,6 +125,8 @@ réelle et en cours d'exécution de HYDRA-UMC-DATALAKE (`POST /ingest`,
 `sink.DatalakeSink`) - à omettre pour afficher les échantillons vidangés
 sur stdout à la place (`sink.ConsoleSink`), utile pour exécuter ce
 collecteur de manière autonome :
+
+Par défaut le collector n'écoute que sur loopback et ses routes d'ingestion sont ouvertes aux appelants locaux. Pour écouter sur une adresse réseau, il faut lui donner un jeton Bearer (`-token`, ou `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` ; au moins 16 caractères) : `POST /ingest/can` et `POST /ingest/ws` exigent alors `Authorization: Bearer <token>` (`/stats` et `/metrics` restent ouvertes pour qu'un collecteur local n'ait besoin d'aucun secret). Un `-addr` hors loopback sans jeton est refusé au démarrage, sauf si `-allow-anonymous` est passé. Le corps d'une requête est limité à 1 Mio (`413` au-delà) et le serveur HTTP applique des délais de lecture, d'écriture et d'inactivité.
 
 ```bash
 # Ingérer un échantillon de télémétrie de type WebSocket

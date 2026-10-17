@@ -18,6 +18,15 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.1.5] - Bounded bodies, optional token, fail-closed network binding
+
+- **Bounded request bodies:** `POST /ingest/can` and `POST /ingest/ws` read the whole body with no limit (`io.ReadAll`, an unbounded JSON decoder), so one oversized request could exhaust memory. Both are now capped at 1 MiB and answer `413` beyond it; a malformed body is still a `400`.
+- **Optional bearer token:** `-token` (or `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`, at least 16 characters) makes the two ingest routes require `Authorization: Bearer <token>` (compared in constant time, `401` otherwise); `/stats` and `/metrics` stay open for a local scraper.
+- **Fail-closed network binding:** a non-loopback `-addr` (including a bare `:8092`) with no token is refused at startup unless `-allow-anonymous` is passed; the loopback default is unchanged.
+- **Server timeouts:** the HTTP server now sets read-header, read, write and idle timeouts and a header size cap, so a slow or stalled client can no longer hold a connection open indefinitely.
+- **Tests:** new tests cover the token (missing, wrong, wrong scheme, correct), the 413 cap on both routes, open `/stats` and `/metrics`, and the startup guard (loopback detection and the refuse/allow matrix); the binary was also checked end to end. `docs/API.md` documents the new `401`/`413` responses.
+- **Docs:** a README in Portuguese (`README_por.md`) joins the other translations.
+
 ## [0.1.4] - A full buffer can drop the least important sample first
 
 - `buffer.Ring.SetPriority` installs an optional drop policy: when the ring is full, a more
