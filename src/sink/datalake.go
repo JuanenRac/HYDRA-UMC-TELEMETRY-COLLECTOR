@@ -129,6 +129,9 @@ type DatalakeSink struct {
 	// BaseURL is the DATALAKE instance's address, e.g. "http://localhost:8095".
 	BaseURL string
 	Client  *http.Client
+	// Token, when set, is sent as `Authorization: Bearer <token>` with every sample: the
+	// datalake can require one for writing (it also guards the deletion of the history).
+	Token string
 }
 
 // NewDatalakeSink returns a DatalakeSink with a real, bounded-timeout
@@ -177,6 +180,9 @@ func (d *DatalakeSink) writeOne(s telemetry.Sample) error {
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if d.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+d.Token)
+	}
 
 	resp, err := d.Client.Do(req)
 	if err != nil {

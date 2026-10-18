@@ -26,6 +26,7 @@ semantic-versioning judgment calls:
 - The duplicate check no longer grows without limit: a made-up `sourceId` per request used to add a tracked producer for ever (and a rejected sample created one); at most 10000 are remembered and the one silent the longest is forgotten. `sourceId` has at most 128 visible ASCII characters.
 - A timestamp in seconds instead of milliseconds, or more than 5 minutes ahead of the clock (`-max-future-skew`), is refused with `400`.
 - `-buffer`, `-batch-size` and `-flush-interval` that are zero or negative stop the start (a negative batch size crashed the flush loop; zero never drained the buffer; a non-positive interval panicked the ticker).
+- `-datalake-token` (or `HYDRA_UMC_DATALAKE_TOKEN`) is sent as a bearer token with every sample, for a HYDRA-UMC-DATALAKE that requires one to write.
 - Documentation: the README no longer promises "thousands of messages per millisecond" or "zero data loss" without saying what holds (about 250 samples per second with the defaults; the buffer is in memory), says that nothing in the ecosystem sends data to the collector yet, and describes the sink's partial-failure behaviour as it is; `docs/API.md` documents the restart handling, the new checks and the new counters.
 
 ## [0.1.5] - Bounded bodies, optional token, fail-closed network binding

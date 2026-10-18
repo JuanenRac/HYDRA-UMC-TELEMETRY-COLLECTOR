@@ -9,6 +9,8 @@ one sample in the collector's own JSON shape (despite the name, it is a plain HT
 `POST`, not a WebSocket); something else has to read the bus or the stream and
 forward it here, and no component of the ecosystem does yet.
 
+Towards HYDRA-UMC-DATALAKE the collector sends `Authorization: Bearer <token>` with every sample when `-datalake-token` (or `HYDRA_UMC_DATALAKE_TOKEN`) is set; a datalake that requires a token and does not get a valid one answers `401`, and the samples wait in the buffer.
+
 Authentication is optional. Started with a token (`-token`, or the
 `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` environment variable; at least 16
 characters), the two `POST /ingest/*` routes require

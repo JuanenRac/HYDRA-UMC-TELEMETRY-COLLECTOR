@@ -47,6 +47,7 @@ func main() {
 	datalakeURL := flag.String("datalake-url", "", "HYDRA-UMC-DATALAKE base URL (e.g. http://localhost:8095) to write samples to; empty prints to stdout instead")
 	token := flag.String("token", os.Getenv(tokenEnv), "bearer token the ingest routes require (default: $"+tokenEnv+"); empty leaves them open")
 	futureSkew := flag.Duration("max-future-skew", telemetry.MaxFutureSkew, "how far ahead of this machine's clock a sample timestamp may be (0 turns the check off)")
+	datalakeToken := flag.String("datalake-token", os.Getenv(datalakeTokenEnv), "bearer token sent to HYDRA-UMC-DATALAKE with every sample (default: $"+datalakeTokenEnv+")")
 	allowAnonymous := flag.Bool("allow-anonymous", false, "allow a non-loopback -addr with no token (the ingest routes are then open to the whole network)")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
@@ -65,7 +66,9 @@ func main() {
 
 	var s sink.Sink
 	if *datalakeURL != "" {
-		s = sink.NewDatalakeSink(*datalakeURL)
+		lake := sink.NewDatalakeSink(*datalakeURL)
+		lake.Token = *datalakeToken
+		s = lake
 		fmt.Printf("[telemetry-collector] delivering to HYDRA-UMC-DATALAKE at %s\n", *datalakeURL)
 	} else {
 		s = sink.ConsoleSink{W: os.Stdout}

@@ -40,3 +40,25 @@ func TestDatalakeSink_AMisconfiguredTokenOrURLWaitsInsteadOfDiscardingSamples(t 
 		}
 	}
 }
+
+func TestDatalakeSink_SendsTheBearerTokenWhenOneIsConfigured(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	t.Cleanup(server.Close)
+
+	plain := NewDatalakeSink(server.URL)
+	if err := plain.Write(oneSample()); err != nil {
+		t.Fatal(err)
+	}
+	withToken := NewDatalakeSink(server.URL)
+	withToken.Token = "a-token-of-16-chars"
+	if err := withToken.Write(oneSample()); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 2 || seen[0] != "" || seen[1] != "Bearer a-token-of-16-chars" {
+		t.Fatalf("Authorization headers = %q, want none and then the bearer token", seen)
+	}
+}

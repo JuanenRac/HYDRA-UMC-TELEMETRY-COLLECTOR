@@ -17,6 +17,9 @@ import (
 // tokenEnv is the environment variable that supplies the ingest bearer token.
 const tokenEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN"
 
+// datalakeTokenEnv supplies the bearer token sent to HYDRA-UMC-DATALAKE.
+const datalakeTokenEnv = "HYDRA_UMC_DATALAKE_TOKEN"
+
 // minTokenLength is the shortest bearer token accepted; shorter ones are
 // guessable, so they are refused instead of silently weakening the check.
 const minTokenLength = 16
