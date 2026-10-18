@@ -18,6 +18,11 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.1.7]
+
+- Maturity is functional: nothing here has been verified on real hardware yet.
+- The READMEs say, in the eight languages, what is planned and what has only been tested against fakes, emulators or fixtures, and carry a short safety and security status note.
+
 ## [0.1.6] - A producer restart no longer loses its samples, an outage no longer discards the oldest ones
 
 - **A restarted producer is recognised.** A device that restarts begins its sequence counter again, and every sample below the highest sequence it had sent (minus the window) was rejected as a duplicate with a `200`, so a producer that had reached 1,000,000 lost the next million samples without any error. A sequence that falls behind the window and is no larger than the window (the counter started over), or the third of a run of increasing numbers behind it, is now accepted as a restart: the producer's state is reset and `producerResets` in `/stats` (and `/metrics`) counts it.

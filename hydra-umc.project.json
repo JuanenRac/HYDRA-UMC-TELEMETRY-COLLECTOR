@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "ecosystem": "HYDRA-UMC",
   "name": "HYDRA-UMC-TELEMETRY-COLLECTOR",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "role": "api",
   "stack": "go",
   "technologies": [
@@ -12,7 +12,7 @@
     "HTTP API"
   ],
   "deployment_target": "cm5",
-  "maturity": "established",
+  "maturity": "functional",
   "family": "Data & Analytics",
   "parent": "HYDRA-UMC-DATALAKE",
   "build": "Go module root is src/. Run go build ./... from inside src/.",
