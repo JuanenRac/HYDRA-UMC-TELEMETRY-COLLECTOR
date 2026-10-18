@@ -33,6 +33,11 @@ type Ring struct {
 	// rejects the newcomer with ErrFull.
 	priority func(telemetry.Sample) int
 	evicted  int
+	// inflight counts samples handed out by DrainReserved whose delivery is
+	// not settled yet. Their slots stay reserved, so what is ingested while a
+	// batch is being written can never take the room that batch needs to come
+	// back to if the write fails.
+	inflight int
 }
 
 // SetPriority installs the drop policy: higher numbers matter more. Safe to
@@ -78,8 +83,8 @@ func New(capacity int) *Ring {
 func (r *Ring) Push(s telemetry.Sample) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.items) >= r.capacity {
-		if r.priority == nil {
+	if len(r.items)+r.inflight >= r.capacity {
+		if r.priority == nil || len(r.items) == 0 {
 			return ErrFull
 		}
 		// Find the least important queued sample (the oldest among equals).
@@ -116,17 +121,19 @@ func (r *Ring) Drain(max int) []telemetry.Sample {
 
 // Requeue puts samples back at the FRONT of the buffer - used when a
 // sink write fails after Drain already removed them, so a temporary
-// outage doesn't lose data (see collector.go). If there isn't enough
-// room for all of them, it keeps as many as fit (oldest-first priority)
-// and reports how many had to be dropped - a real, honest limit: this
-// buffer is bounded, not infinite, and an outage that outlasts its
-// capacity WILL lose the oldest excess, which is a capacity-sizing
-// decision for whoever deploys this, not something this package can
-// solve by pretending to have unlimited memory.
+// outage doesn't lose data. If there isn't enough room for all of them,
+// it keeps the OLDEST ones that fit and reports how many (the newest of the
+// requeued samples) had to be dropped. The collector does not rely on this:
+// it takes its batches with DrainReserved and gives them back with Settle,
+// so a failed write always finds the room it left.
 func (r *Ring) Requeue(samples []telemetry.Sample) (dropped int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	room := r.capacity - len(r.items)
+	return r.requeueLocked(samples)
+}
+
+func (r *Ring) requeueLocked(samples []telemetry.Sample) (dropped int) {
+	room := r.capacity - len(r.items) - r.inflight
 	if room <= 0 {
 		return len(samples)
 	}
@@ -135,8 +142,46 @@ func (r *Ring) Requeue(samples []telemetry.Sample) (dropped int) {
 		dropped = len(toKeep) - room
 		toKeep = toKeep[:room]
 	}
-	r.items = append(toKeep, r.items...)
+	r.items = append(append(make([]telemetry.Sample, 0, len(toKeep)+len(r.items)), toKeep...), r.items...)
 	return dropped
+}
+
+// DrainReserved is Drain, except the slots of the returned samples stay
+// reserved until Settle is called: the buffer keeps counting them as taken, so
+// a sink outage cannot make the batch lose its place to newer samples.
+func (r *Ring) DrainReserved(max int) []telemetry.Sample {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if max > len(r.items) {
+		max = len(r.items)
+	}
+	out := make([]telemetry.Sample, max)
+	copy(out, r.items[:max])
+	r.items = r.items[max:]
+	r.inflight += max
+	return out
+}
+
+// Settle ends the reservation of a batch taken with DrainReserved: `drained`
+// is the size of that batch, `requeue` the part of it that has to be tried again
+// (it goes back to the front, in order, into the room the reservation kept free;
+// the rest was delivered or permanently discarded). Returns how many of `requeue`
+// did not fit, which cannot happen unless the reservation was not honoured.
+func (r *Ring) Settle(drained int, requeue []telemetry.Sample) (dropped int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.inflight -= drained
+	if r.inflight < 0 {
+		r.inflight = 0
+	}
+	return r.requeueLocked(requeue)
+}
+
+// InFlight is how many samples are reserved by a batch being delivered.
+func (r *Ring) InFlight() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.inflight
 }
 
 func (r *Ring) Len() int {

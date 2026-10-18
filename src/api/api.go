@@ -192,6 +192,9 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"transportErrors":   stats.TransportErrors,
 		"dropped":           stats.Dropped,
 		"quarantined":       stats.Quarantined,
+		"producerResets":    stats.Resets,
+		"producers":         stats.Sources,
+		"inFlight":          stats.InFlight,
 		"bufferLen":         s.collector.BufferLen(),
 		"bufferCap":         s.collector.BufferCap(),
 	})
@@ -239,6 +242,9 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		{prefix + "transport_errors_total", "Flush failures from a transport-level problem (network, timeout, 5xx) - retrying may help.", "counter", stats.TransportErrors},
 		{prefix + "dropped_total", "Samples permanently lost because a requeue outran the ring buffer's own bounded capacity.", "counter", stats.Dropped},
 		{prefix + "quarantined_total", "Samples permanently discarded because the sink rejected their exact content as invalid (never retried).", "counter", stats.Quarantined},
+		{prefix + "producer_resets_total", "Producers whose sequence counter started over (a restart); their new samples were accepted.", "counter", stats.Resets},
+		{prefix + "producers", "Producers the duplicate check currently remembers (bounded).", "gauge", int64(stats.Sources)},
+		{prefix + "in_flight", "Buffer slots held by a batch that is being delivered.", "gauge", int64(stats.InFlight)},
 		{prefix + "buffer_length", "Samples currently sitting in the ring buffer, waiting to be flushed.", "gauge", int64(s.collector.BufferLen())},
 		{prefix + "buffer_capacity", "The ring buffer's own fixed maximum capacity.", "gauge", int64(s.collector.BufferCap())},
 	}

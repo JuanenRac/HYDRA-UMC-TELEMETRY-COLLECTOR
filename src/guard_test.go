@@ -8,6 +8,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIsLoopbackAddr(t *testing.T) {
@@ -50,6 +51,28 @@ func TestStartupProblem(t *testing.T) {
 		got := startupProblem(c.addr, c.token, c.allowAnonymous)
 		if (got != "") != c.wantProblem {
 			t.Errorf("%s: startupProblem = %q, wantProblem %v", c.name, got, c.wantProblem)
+		}
+	}
+}
+
+func TestFlagProblem(t *testing.T) {
+	if p := flagProblem(10000, 500, 2*time.Second); p != "" {
+		t.Fatalf("the defaults are fine, got %q", p)
+	}
+	for _, c := range []struct {
+		name          string
+		buf, batch    int
+		interval      time.Duration
+		wantSubstring string
+	}{
+		{"zero buffer", 0, 500, time.Second, "-buffer"},
+		{"negative batch", 10, -1, time.Second, "-batch-size"},
+		{"zero batch", 10, 0, time.Second, "-batch-size"},
+		{"zero interval", 10, 10, 0, "-flush-interval"},
+		{"negative interval", 10, 10, -time.Second, "-flush-interval"},
+	} {
+		if p := flagProblem(c.buf, c.batch, c.interval); !strings.Contains(p, c.wantSubstring) {
+			t.Errorf("%s: got %q, want it to name %s", c.name, p, c.wantSubstring)
 		}
 	}
 }

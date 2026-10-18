@@ -11,6 +11,7 @@ package main
 import (
 	"net"
 	"strings"
+	"time"
 )
 
 // tokenEnv is the environment variable that supplies the ingest bearer token.
@@ -47,6 +48,22 @@ func startupProblem(addr, token string, allowAnonymous bool) string {
 	if !isLoopbackAddr(addr) && token == "" && !allowAnonymous {
 		return "refusing to listen on " + addr + " without a token: set -token (or $" + tokenEnv + "), " +
 			"or pass -allow-anonymous to expose the ingest routes openly"
+	}
+	return ""
+}
+
+// flagProblem returns why the numeric settings cannot be used, or "" when they
+// are fine: a negative batch size makes the flush goroutine panic, zero never
+// drains the buffer, and a non-positive interval panics the ticker.
+func flagProblem(bufferCap, batchSize int, flushInterval time.Duration) string {
+	if bufferCap < 1 {
+		return "-buffer must be at least 1"
+	}
+	if batchSize < 1 {
+		return "-batch-size must be at least 1"
+	}
+	if flushInterval <= 0 {
+		return "-flush-interval must be a positive duration"
 	}
 	return ""
 }

@@ -18,6 +18,16 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.1.6] - A producer restart no longer loses its samples, an outage no longer discards the oldest ones
+
+- **A restarted producer is recognised.** A device that restarts begins its sequence counter again, and every sample below the highest sequence it had sent (minus the window) was rejected as a duplicate with a `200`, so a producer that had reached 1,000,000 lost the next million samples without any error. A sequence that falls behind the window and is no larger than the window (the counter started over), or the third of a run of increasing numbers behind it, is now accepted as a restart: the producer's state is reset and `producerResets` in `/stats` (and `/metrics`) counts it.
+- **A sink outage no longer discards the oldest samples.** The batch being delivered gave its slots back to the buffer, ingestion filled them during the outage, and the requeue of the failed batch then discarded it (the oldest data) at 500 samples every 2 seconds. The batch now keeps its slots until it is settled, so the buffer fills up and ingestion answers `503` instead; nothing that was accepted is lost, and it is delivered in order when the sink is back. `/stats` gains `inFlight`.
+- A sample the sink rejects as invalid no longer causes the samples written just before it to be sent again (only what comes after it is retried), and a `413` is treated as permanent like a `400`; a `401`, `403` or `404` (a wrong token or URL) keeps the samples waiting instead of discarding them.
+- The duplicate check no longer grows without limit: a made-up `sourceId` per request used to add a tracked producer for ever (and a rejected sample created one); at most 10000 are remembered and the one silent the longest is forgotten. `sourceId` has at most 128 visible ASCII characters.
+- A timestamp in seconds instead of milliseconds, or more than 5 minutes ahead of the clock (`-max-future-skew`), is refused with `400`.
+- `-buffer`, `-batch-size` and `-flush-interval` that are zero or negative stop the start (a negative batch size crashed the flush loop; zero never drained the buffer; a non-positive interval panicked the ticker).
+- Documentation: the README no longer promises "thousands of messages per millisecond" or "zero data loss" without saying what holds (about 250 samples per second with the defaults; the buffer is in memory), says that nothing in the ecosystem sends data to the collector yet, and describes the sink's partial-failure behaviour as it is; `docs/API.md` documents the restart handling, the new checks and the new counters.
+
 ## [0.1.5] - Bounded bodies, optional token, fail-closed network binding
 
 - **Bounded request bodies:** `POST /ingest/can` and `POST /ingest/ws` read the whole body with no limit (`io.ReadAll`, an unbounded JSON decoder), so one oversized request could exhaust memory. Both are now capped at 1 MiB and answer `413` beyond it; a malformed body is still a `400`.

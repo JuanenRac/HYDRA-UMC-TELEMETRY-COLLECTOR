@@ -486,8 +486,11 @@ func TestCollector_InvalidDataQuarantinesOnlyThePoisonedSample(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("FlushOnce with a poisoned sample in the batch returned %d, want 0", n)
 	}
-	if c.BufferLen() != 2 {
-		t.Fatalf("BufferLen() = %d, want 2 - only the poisoned sample should have been dropped; robot-1 and robot-3 must survive", c.BufferLen())
+	// The sink writes a batch in order and stops at the first failure: robot-1 was
+	// written before robot-2 was rejected, so it is not sent again; robot-3 was never
+	// attempted and waits for the next flush.
+	if c.BufferLen() != 1 {
+		t.Fatalf("BufferLen() = %d, want 1 - robot-1 was already written, robot-2 is discarded, only robot-3 is retried", c.BufferLen())
 	}
 	stats := c.Stats()
 	if stats.InvalidDataErrors != 1 {
@@ -497,17 +500,17 @@ func TestCollector_InvalidDataQuarantinesOnlyThePoisonedSample(t *testing.T) {
 		t.Fatalf("Quarantined = %d, want 1", stats.Quarantined)
 	}
 	if stats.Dropped != 0 {
-		t.Fatalf("Dropped = %d, want 0 - there was room to requeue the 2 survivors", stats.Dropped)
+		t.Fatalf("Dropped = %d, want 0 - there was room to requeue the survivor", stats.Dropped)
 	}
 
 	// Before this fix, this second flush would fail identically forever
 	// (the poisoned sample would still be sitting at the front of the
 	// buffer). The exact same sink - still configured to reject
-	// "robot-2" if it ever saw it again - now flushes the 2 survivors
+	// "robot-2" if it ever saw it again - now flushes the survivor
 	// successfully, because the poison is actually gone.
 	n = c.FlushOnce(10)
-	if n != 2 {
-		t.Fatalf("FlushOnce after quarantine returned %d, want 2 (robot-1 and robot-3 must now flush successfully)", n)
+	if n != 1 {
+		t.Fatalf("FlushOnce after quarantine returned %d, want 1 (robot-3, the only one not yet written, must now flush successfully)", n)
 	}
 	if c.BufferLen() != 0 {
 		t.Fatalf("BufferLen() = %d, want 0 after the survivors flush", c.BufferLen())
@@ -629,9 +632,10 @@ func TestQuarantineSample(t *testing.T) {
 		{SourceID: "a"}, {SourceID: "b"}, {SourceID: "c"},
 	}
 
+	// "a" was answered before "b" was rejected, so only what comes after "b" is retried
 	got := quarantineSample(batch, 1)
-	if len(got) != 2 || got[0].SourceID != "a" || got[1].SourceID != "c" {
-		t.Fatalf("quarantineSample(batch, 1) = %+v, want [a c]", got)
+	if len(got) != 1 || got[0].SourceID != "c" {
+		t.Fatalf("quarantineSample(batch, 1) = %+v, want [c]", got)
 	}
 
 	// A sink that can't actually identify the offending sample (a

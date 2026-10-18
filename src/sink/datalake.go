@@ -189,7 +189,11 @@ func (d *DatalakeSink) writeOne(s telemetry.Sample) error {
 	// failure, not assumed to be fine.
 	if resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if resp.StatusCode == http.StatusBadRequest {
+		// 400: DATALAKE validated and rejected this sample; 413: it is too large. Both are
+		// permanent for these exact bytes. 401, 403 and 404 are NOT here: a wrong token or
+		// URL is a configuration problem that fixing the configuration repairs, so the
+		// samples wait instead of being discarded.
+		if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusRequestEntityTooLarge {
 			// DATALAKE's own api.py returns 400 specifically when it
 			// validated and rejected this sample's content - a real,
 			// permanent rejection of these exact bytes, not a transient

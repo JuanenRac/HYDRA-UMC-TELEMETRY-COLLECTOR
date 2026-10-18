@@ -8,24 +8,56 @@
 // re-buffer the same sample twice".
 package dedup
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 const defaultWindow = 64
+
+// DefaultMaxSources bounds how many producers are remembered at once; past it
+// the one that has been silent the longest is forgotten. A sourceId is free
+// text sent by the client, so without a bound a flood of made-up ids would
+// grow the memory of the process without limit.
+const DefaultMaxSources = 10000
+
+// restartRun is how many consecutive, increasing sequence numbers that all
+// fall behind the window it takes to call it a producer restart (when the
+// restarted counter did not start near zero).
+const restartRun = 3
 
 // Tracker deduplicates (sourceID, sequence) pairs. A sequence within the
 // window of the highest one already seen for that source is allowed
 // exactly once - a real, legitimately reordered arrival (seq 3 before
 // seq 2) is accepted, but the same seq arriving twice, or one older than
 // the window (a stale replay of an already-acked message), is not.
+//
+// A producer that restarts begins its counter again, far behind everything
+// it sent before. That is told apart from a stale replay: a sequence number
+// that falls behind the window and is no larger than the window itself is a
+// counter that started over (a replay is of the last few messages, never of
+// the first ones of a long run), and so is a run of increasing numbers that
+// all fall behind the window. Either resets that producer's state, so its new
+// samples are not rejected as duplicates until the counter catches up with
+// where it was.
 type Tracker struct {
-	mu      sync.Mutex
-	window  uint64
-	sources map[string]*sourceState
+	mu         sync.Mutex
+	window     uint64
+	maxSources int
+	now        func() time.Time
+	sources    map[string]*sourceState
+	resets     int64
+	evicted    int64
 }
 
 type sourceState struct {
-	maxSeen uint64
-	seen    map[uint64]struct{}
+	maxSeen  uint64
+	seen     map[uint64]struct{}
+	lastUsed time.Time
+	// the run of increasing sequences, all behind the window, that may be a restart
+	behindRun   int
+	behindLast  uint64
+	behindFirst uint64
 }
 
 // New returns a Tracker that remembers, per source, sequence numbers
@@ -36,30 +68,86 @@ func New(window int) *Tracker {
 	if window <= 0 {
 		window = defaultWindow
 	}
-	return &Tracker{window: uint64(window), sources: make(map[string]*sourceState)}
+	return &Tracker{window: uint64(window), maxSources: DefaultMaxSources, now: time.Now, sources: make(map[string]*sourceState)}
 }
+
+// SetMaxSources changes how many producers are remembered (at least 1).
+func (t *Tracker) SetMaxSources(n int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if n < 1 {
+		n = 1
+	}
+	t.maxSources = n
+}
+
+// Resets is how many times a producer's counter was found to have started
+// over (a restart) since the tracker was created.
+func (t *Tracker) Resets() int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.resets
+}
+
+// Sources is how many producers are currently remembered.
+func (t *Tracker) Sources() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.sources)
+}
+
+// Evicted is how many producers were forgotten because the tracker was full.
+func (t *Tracker) Evicted() int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.evicted
+}
+
+type verdict int
+
+const (
+	verdictNew verdict = iota
+	verdictDuplicate
+	verdictRestart
+)
 
 // checkLocked reports whether `sequence` is real, new data for
 // `sourceID` - the SAME rule Allow/AllowThen both enforce, factored out
 // so the two never drift apart. Caller must already hold t.mu. Never
-// mutates state - see commitLocked for the half that does.
-func (t *Tracker) checkLocked(sourceID string, sequence uint64) (*sourceState, bool) {
+// mutates state (a source that is not known yet is not created here) - see
+// commitLocked for the half that does.
+func (t *Tracker) checkLocked(sourceID string, sequence uint64) (*sourceState, verdict) {
 	st, ok := t.sources[sourceID]
 	if !ok {
-		st = &sourceState{seen: make(map[uint64]struct{}, t.window)}
-		t.sources[sourceID] = st
+		return nil, verdictNew
 	}
-
 	if _, dup := st.seen[sequence]; dup {
-		return st, false
+		return st, verdictDuplicate
 	}
 	if st.maxSeen > 0 && sequence+t.window <= st.maxSeen {
-		// Outside the reorder window behind what we've already
-		// accepted - a real replay of old data, not a legitimately
-		// late arrival.
-		return st, false
+		// Behind the reorder window: a stale replay of old data - or a
+		// producer whose counter started over.
+		if sequence <= t.window {
+			return st, verdictRestart
+		}
+		if st.behindRun >= restartRun-1 && sequence > st.behindLast {
+			return st, verdictRestart
+		}
+		return st, verdictDuplicate
 	}
-	return st, true
+	return st, verdictNew
+}
+
+// noteBehindLocked remembers a rejected sequence that fell behind the window,
+// so that a run of increasing ones can be recognised as a restart.
+func (t *Tracker) noteBehindLocked(st *sourceState, sequence uint64) {
+	if st.behindRun > 0 && sequence > st.behindLast {
+		st.behindRun++
+	} else {
+		st.behindRun = 1
+		st.behindFirst = sequence
+	}
+	st.behindLast = sequence
 }
 
 // commitLocked records `sequence` as seen and advances/prunes the
@@ -67,7 +155,20 @@ func (t *Tracker) checkLocked(sourceID string, sequence uint64) (*sourceState, b
 // out, so a caller (AllowThen) can skip it entirely when whatever it
 // meant to do with an allowed sequence didn't actually happen. Caller
 // must already hold t.mu.
-func (t *Tracker) commitLocked(st *sourceState, sequence uint64) {
+func (t *Tracker) commitLocked(sourceID string, st *sourceState, sequence uint64, v verdict) {
+	if st == nil {
+		t.makeRoomLocked()
+		st = &sourceState{seen: make(map[uint64]struct{}, t.window)}
+		t.sources[sourceID] = st
+	}
+	if v == verdictRestart {
+		st.maxSeen = 0
+		st.seen = make(map[uint64]struct{}, t.window)
+		st.behindRun = 0
+		t.resets++
+	}
+	st.behindRun = 0
+	st.lastUsed = t.now()
 	st.seen[sequence] = struct{}{}
 	if sequence > st.maxSeen {
 		st.maxSeen = sequence
@@ -79,6 +180,26 @@ func (t *Tracker) commitLocked(st *sourceState, sequence uint64) {
 				delete(st.seen, seq)
 			}
 		}
+	}
+}
+
+// makeRoomLocked forgets the producer that has been silent the longest when
+// the tracker is at its limit.
+func (t *Tracker) makeRoomLocked() {
+	for len(t.sources) >= t.maxSources {
+		var oldestID string
+		var oldest time.Time
+		first := true
+		for id, st := range t.sources {
+			if first || st.lastUsed.Before(oldest) {
+				oldestID, oldest, first = id, st.lastUsed, false
+			}
+		}
+		if first {
+			return
+		}
+		delete(t.sources, oldestID)
+		t.evicted++
 	}
 }
 
@@ -95,11 +216,14 @@ func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	st, ok := t.checkLocked(sourceID, sequence)
-	if !ok {
+	st, v := t.checkLocked(sourceID, sequence)
+	if v == verdictDuplicate {
+		if st != nil && st.maxSeen > 0 && sequence+t.window <= st.maxSeen {
+			t.noteBehindLocked(st, sequence)
+		}
 		return false
 	}
-	t.commitLocked(st, sequence)
+	t.commitLocked(sourceID, st, sequence, v)
 	return true
 }
 
@@ -130,8 +254,11 @@ func (t *Tracker) AllowThen(sourceID string, sequence uint64, accept func() erro
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	st, ok := t.checkLocked(sourceID, sequence)
-	if !ok {
+	st, v := t.checkLocked(sourceID, sequence)
+	if v == verdictDuplicate {
+		if st != nil && st.maxSeen > 0 && sequence+t.window <= st.maxSeen {
+			t.noteBehindLocked(st, sequence)
+		}
 		return false, nil
 	}
 	if err := accept(); err != nil {
@@ -141,6 +268,6 @@ func (t *Tracker) AllowThen(sourceID string, sequence uint64, accept func() erro
 		// identical "not yet seen" state and can succeed then.
 		return true, err
 	}
-	t.commitLocked(st, sequence)
+	t.commitLocked(sourceID, st, sequence, v)
 	return true, nil
 }

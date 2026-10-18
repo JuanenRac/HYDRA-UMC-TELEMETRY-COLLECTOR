@@ -53,6 +53,14 @@ type Stats struct {
 	// were retried, so they are reported here instead of silently
 	// vanishing from every other counter.
 	Quarantined int64
+	// Resets counts producers whose sequence counter was found to have started
+	// over (a restart): the samples after it are accepted instead of being
+	// rejected as duplicates until the counter caught up.
+	Resets int64
+	// Sources is how many producers the duplicate check currently remembers.
+	Sources int
+	// InFlight is how many buffered slots a batch being delivered holds.
+	InFlight int
 }
 
 type Collector struct {
@@ -167,7 +175,11 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 // Returns the number of samples actually flushed (0 on failure or an
 // empty buffer).
 func (c *Collector) FlushOnce(batchSize int) int {
-	batch := c.buf.Drain(batchSize)
+	// The batch keeps its slots reserved until it is settled, so what is
+	// ingested while it is being written cannot take the room it needs to
+	// come back to on a failure: a sink outage makes the buffer fill up (and
+	// ingestion answer 503) instead of discarding the oldest samples.
+	batch := c.buf.DrainReserved(batchSize)
 	if len(batch) == 0 {
 		return 0
 	}
@@ -181,8 +193,7 @@ func (c *Collector) FlushOnce(batchSize int) int {
 		if invalid, ok := sink.AsInvalidData(err); ok {
 			c.invalidDataErrors.Add(1)
 			c.quarantined.Add(1)
-			toRequeue := quarantineSample(batch, invalid.Index)
-			dropped := c.buf.Requeue(toRequeue)
+			dropped := c.buf.Settle(len(batch), quarantineSample(batch, invalid.Index))
 			if dropped > 0 {
 				c.dropped.Add(int64(dropped))
 			}
@@ -207,32 +218,29 @@ func (c *Collector) FlushOnce(batchSize int) int {
 		if partial, ok := sink.AsPartialWrite(err); ok && partial.Succeeded >= 0 && partial.Succeeded <= len(batch) {
 			toRequeue = batch[partial.Succeeded:]
 		}
-		dropped := c.buf.Requeue(toRequeue)
+		dropped := c.buf.Settle(len(batch), toRequeue)
 		if dropped > 0 {
 			c.dropped.Add(int64(dropped))
 		}
 		return 0
 	}
+	c.buf.Settle(len(batch), nil)
 	c.flushed.Add(int64(len(batch)))
 	return len(batch)
 }
 
-// quarantineSample returns a copy of batch with the sample at index
-// removed - the one permanently-rejected sample must never be requeued,
-// but every other sample in the batch (which the sink either already
-// wrote successfully or never got to attempt - see DatalakeSink's own
-// per-sample loop) still deserves its normal retry via Requeue(). A
-// negative or out-of-range index (a sink that couldn't actually
-// determine which sample failed) falls back to keeping the whole batch,
-// the same safe behavior as a plain transport error.
+// quarantineSample returns what has to be tried again after the sample at
+// index was permanently rejected: the samples AFTER it, which the sink never
+// got to attempt. The ones before it were each answered with a real 202 (the
+// sink writes a batch in order and stops at the first failure) and are not
+// sent again; the rejected one is discarded. A negative or out-of-range index
+// (a sink that couldn't actually determine which sample failed) falls back to
+// keeping the whole batch, the same safe behavior as a plain transport error.
 func quarantineSample(batch []telemetry.Sample, index int) []telemetry.Sample {
 	if index < 0 || index >= len(batch) {
 		return batch
 	}
-	out := make([]telemetry.Sample, 0, len(batch)-1)
-	out = append(out, batch[:index]...)
-	out = append(out, batch[index+1:]...)
-	return out
+	return batch[index+1:]
 }
 
 // Run flushes on a fixed interval until ctx is cancelled - the
@@ -262,6 +270,9 @@ func (c *Collector) Stats() Stats {
 		TransportErrors:   c.transportErrors.Load(),
 		Dropped:           c.dropped.Load(),
 		Quarantined:       c.quarantined.Load(),
+		Resets:            c.dedup.Resets(),
+		Sources:           c.dedup.Sources(),
+		InFlight:          c.buf.InFlight(),
 	}
 }
 

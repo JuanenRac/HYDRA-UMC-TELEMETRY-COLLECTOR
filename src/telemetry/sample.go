@@ -11,7 +11,24 @@
 // originally arrived over.
 package telemetry
 
-import "math"
+import (
+	"math"
+	"time"
+)
+
+// MinPlausibleTimestampMs is the earliest timestamp accepted (in milliseconds
+// since the epoch, early 1973). A value below it is a producer that sent
+// seconds instead of milliseconds: 1700000000 would be January 1970.
+const MinPlausibleTimestampMs int64 = 100_000_000_000
+
+// MaxFutureSkew is how far ahead of this machine's clock a timestamp may be (a
+// little skew between the producer and this machine is normal). Zero turns the
+// check off.
+var MaxFutureSkew = 5 * time.Minute
+
+// MaxSourceIDLength bounds a sourceId: it is free text sent by the client and
+// the key of every table downstream.
+const MaxSourceIDLength = 128
 
 // Sample is one normalized telemetry reading.
 type Sample struct {
@@ -36,11 +53,20 @@ func (s Sample) Validate() error {
 	if s.SourceID == "" {
 		return ErrMissingSourceID
 	}
+	if len(s.SourceID) > MaxSourceIDLength || !printable(s.SourceID) {
+		return ErrInvalidSourceID
+	}
 	if s.Kind == "" {
 		return ErrMissingKind
 	}
 	if s.Timestamp <= 0 {
 		return ErrInvalidTimestamp
+	}
+	if s.Timestamp < MinPlausibleTimestampMs {
+		return ErrImplausibleTimestamp
+	}
+	if MaxFutureSkew > 0 && s.Timestamp > nowFunc()+MaxFutureSkew.Milliseconds() {
+		return ErrImplausibleTimestamp
 	}
 	for key, value := range s.Fields {
 		if key == "" || math.IsNaN(value) || math.IsInf(value, 0) {
@@ -48,4 +74,14 @@ func (s Sample) Validate() error {
 		}
 	}
 	return nil
+}
+
+// printable reports whether s has only visible ASCII characters and spaces.
+func printable(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }

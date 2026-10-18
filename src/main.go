@@ -31,12 +31,13 @@ import (
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/api"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
 )
 
 const projectName = "HYDRA-UMC-TELEMETRY-COLLECTOR"
 
-const role = "Telemetry-Collector - high-throughput multi-protocol " +
-	"ingestion node (CAN/WebSocket/gRPC), feeds HYDRA-UMC-DATALAKE."
+const role = "Telemetry-Collector - ingestion node for CAN frames and JSON " +
+	"telemetry received over HTTP, feeds HYDRA-UMC-DATALAKE."
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8092", "address to listen on for the HTTP API")
@@ -45,9 +46,15 @@ func main() {
 	batchSize := flag.Int("batch-size", 500, "max samples per flush")
 	datalakeURL := flag.String("datalake-url", "", "HYDRA-UMC-DATALAKE base URL (e.g. http://localhost:8095) to write samples to; empty prints to stdout instead")
 	token := flag.String("token", os.Getenv(tokenEnv), "bearer token the ingest routes require (default: $"+tokenEnv+"); empty leaves them open")
+	futureSkew := flag.Duration("max-future-skew", telemetry.MaxFutureSkew, "how far ahead of this machine's clock a sample timestamp may be (0 turns the check off)")
 	allowAnonymous := flag.Bool("allow-anonymous", false, "allow a non-loopback -addr with no token (the ingest routes are then open to the whole network)")
 	flag.Parse()
+	telemetry.MaxFutureSkew = *futureSkew
 
+	if problem := flagProblem(*bufferCap, *batchSize, *flushInterval); problem != "" {
+		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
+		os.Exit(2)
+	}
 	if problem := startupProblem(*addr, *token, *allowAnonymous); problem != "" {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
 		os.Exit(2)

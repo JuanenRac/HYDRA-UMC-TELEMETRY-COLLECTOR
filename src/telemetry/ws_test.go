@@ -47,7 +47,7 @@ func TestParseWSMessage_RejectsMissingTimestamp(t *testing.T) {
 }
 
 func TestSampleValidateRejectsNonFiniteOrUnnamedFields(t *testing.T) {
-	base := Sample{SourceID: "robot-1", Kind: "motor_temp", Timestamp: 1}
+	base := Sample{SourceID: "robot-1", Kind: "motor_temp", Timestamp: 1_700_000_000_000}
 	for name, fields := range map[string]map[string]float64{
 		"nan":      {"value": math.NaN()},
 		"infinity": {"value": math.Inf(1)},

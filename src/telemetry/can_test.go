@@ -7,7 +7,7 @@ import "testing"
 
 func TestParseCANFrame_RoundTripsWithEncodeCANFrame(t *testing.T) {
 	orig := nowFunc
-	nowFunc = func() int64 { return 1000 }
+	nowFunc = func() int64 { return 1_700_000_000_000 }
 	defer func() { nowFunc = orig }()
 
 	frame, err := EncodeCANFrame("motor_current", 12.5)
@@ -24,8 +24,8 @@ func TestParseCANFrame_RoundTripsWithEncodeCANFrame(t *testing.T) {
 	if sample.Kind != "motor_current" {
 		t.Errorf("Kind = %q, want %q", sample.Kind, "motor_current")
 	}
-	if sample.Timestamp != 1000 {
-		t.Errorf("Timestamp = %d, want 1000", sample.Timestamp)
+	if sample.Timestamp != 1_700_000_000_000 {
+		t.Errorf("Timestamp = %d, want 1700000000000", sample.Timestamp)
 	}
 	got := sample.Fields["value"]
 	if got < 12.4999 || got > 12.5001 {
