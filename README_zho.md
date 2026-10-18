@@ -18,6 +18,16 @@
 
 ---
 
+## 📋 速览
+
+| | |
+|---|---|
+| 版本 | `0.1.6` |
+| 成熟度 | 成熟 |
+| 技术栈 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
+| 目标 | HYDRA-UMC 工作单元的 Raspberry Pi CM5 |
+| 真实硬件 | 尚未：此版本没有在真实硬件上运行的记录 |
+
 ## 1. 🛠️ 技术概述
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** 是捕获生态系统内所有原始通信的高速

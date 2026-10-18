@@ -18,6 +18,16 @@
 
 ---
 
+## 📋 ひと目で
+
+| | |
+|---|---|
+| バージョン | `0.1.6` |
+| 成熟度 | 確立 |
+| 技術 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
+| 対象 | HYDRA-UMC セルの Raspberry Pi CM5 |
+| 実機での確認 | まだです：このバージョンについて実機での動作記録はありません |
+
 ## 1. 🛠️ 技術概要
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** は、エコシステム内のすべての生の通信

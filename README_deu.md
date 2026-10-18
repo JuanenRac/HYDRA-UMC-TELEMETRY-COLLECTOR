@@ -18,6 +18,16 @@
 
 ---
 
+## 📋 Auf einen Blick
+
+| | |
+|---|---|
+| Version | `0.1.6` |
+| Reifegrad | Etabliert |
+| Technik | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
+| Ziel | Der Raspberry Pi CM5 einer HYDRA-UMC-Zelle |
+| Auf echter Hardware | Noch nicht: für diese Version ist kein Lauf auf echter Hardware vermerkt |
+
 ## 1. 🛠️ TECHNISCHER ÜBERBLICK
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** ist das Hochgeschwindigkeits-Gateway, das die gesamte Rohkommunikation innerhalb del Ökosystems erfasst. Es lauscht auf den FDCAN-Bussen und WebSocket-Streams und leitet die Daten in den Datalake weiter.
