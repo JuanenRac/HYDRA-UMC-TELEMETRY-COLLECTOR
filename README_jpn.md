@@ -103,9 +103,9 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── build_test.py     # バージョンを増やさないビルドチェック
 │   └── ci_validate.py    # CI が使用するマニフェスト/CHANGELOG/ドキュメント検証
 ├── build/                # コンパイル済みバイナリ（gitignore 対象）
-├── bump_version.py        # ネイティブバージョンのオドメーター式インクリメント（ビルドが実行）
+├── bump_version.py        # オドメーター式バージョンインクリメント（明示的な `bump` コマンドのみが実行）
 ├── bump_manifest_version.py # hydra-umc.project.json のバージョンをネイティブ版と同期(--sync)
-├── build.sh / build.bat   # 実際のビルド：バージョンインクリメント + go build
+├── build.sh / build.bat   # 検証してビルド（ビルドはバージョンを変更しない）
 ├── run.sh / run.bat       # 実際の実行：コンパイル済みバイナリを実行
 └── README.md
 ```
@@ -132,7 +132,7 @@ build.bat
 run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 ```
 
-`build` はバージョンを増加させ（`src/version.go`）、`src/` 内の Go
+`build` はバージョンを変更せず（`src/version.go`）、`src/` 内の Go
 モジュールを `build/telemetry-collector(.exe)` としてコンパイルします。
 `run` はコンパイル済みバイナリを実行し、フラグをそのまま渡して、
 実際のトラフィックのリッスンを開始します。`-datalake-url` は

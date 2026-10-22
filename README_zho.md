@@ -102,9 +102,9 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── build_test.py     # 不递增版本号的构建检查
 │   └── ci_validate.py    # CI 使用的清单/CHANGELOG/文档校验
 ├── build/                # 编译后的二进制文件（已被 gitignore）
-├── bump_version.py        # 原生版本的里程表式递增（由构建运行）
+├── bump_version.py        # 里程表式版本递增（仅由显式 `bump` 命令运行）
 ├── bump_manifest_version.py # 将 hydra-umc.project.json 的版本与原生版本同步(--sync)
-├── build.sh / build.bat   # 真实构建：版本递增 + go build
+├── build.sh / build.bat   # 验证并构建（构建不会更改版本）
 ├── run.sh / run.bat       # 真实运行：执行编译后的二进制文件
 └── README.md
 ```
@@ -130,7 +130,7 @@ build.bat
 run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 ```
 
-`build` 会递增版本号（`src/version.go`），并将 `src/` 中的 Go 模块编译
+`build` 不会更改版本号，并将 `src/` 中的 Go 模块编译
 为 `build/telemetry-collector(.exe)`。`run` 执行编译后的二进制文件，
 转发任何标志，并开始监听真实流量。`-datalake-url` 会将刷新后的批次
 指向一个真实的、正在运行的 HYDRA-UMC-DATALAKE 实例（`POST /ingest`，

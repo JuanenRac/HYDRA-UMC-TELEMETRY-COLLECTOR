@@ -19,7 +19,7 @@ printf '%s\n' "* Email     : electrohobby3d@gmail.com"
 printf '%s\n' "* Copyright : (C) 2026 JuanenRac"
 printf '%s\n' "* License   : GPL-3.0 - see LICENSE"
 printf '%s\n' "* ------------------------------------------------------------------------- *"
-printf '%s\n' "* 1. Increment the project version and synchronise its manifest."
+printf '%s\n' "* 1. Read the project version (building never changes it; use the explicit bump command)."
 printf '%s\n' "* 2. Run this project's declared build, verification and packaging commands."
 printf '%s\n' "* 3. Report the result and keep an interactive terminal open."
 printf '%s\n' "*******************************************************************************"
@@ -34,19 +34,10 @@ cd "$(dirname "$0")"
 # stdin is actually a terminal (never in CI/piped/non-interactive runs).
 trap '[ -t 0 ] && read -r -p "Press Enter to close..." _' EXIT
 # HYDRA_UMC_SCRIPT_STANDARD_VERSION_STEP
-printf '%s\n' "[1/2] Incrementing project version and synchronising its manifest..."
-python3 bump_version.py || exit 1
-# HYDRA_UMC_SCRIPT_STANDARD_VERSION_CAPTURE_BEFORE
-HYDRA_UMC_VERSION_BEFORE="$(python3 -c 'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["version"])' "$(dirname "$0")/hydra-umc.project.json")"
-python3 "$(dirname "$0")/bump_manifest_version.py" --sync || exit 1
-# HYDRA_UMC_SCRIPT_STANDARD_VERSION_CAPTURE_AFTER
-HYDRA_UMC_VERSION_AFTER="$(python3 -c 'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["version"])' "$(dirname "$0")/hydra-umc.project.json")"
-printf '\n*******************************************************************************\n'
-printf '%s\n' '* VERSION INCREMENT COMPLETED'
-printf '%s\n' "* v${HYDRA_UMC_VERSION_BEFORE:-unknown} -> v${HYDRA_UMC_VERSION_AFTER:-unknown}"
-printf '%s\n' '* Project manifest has been synchronised by the project build flow.'
-printf '%s\n' '*******************************************************************************'
-printf '\n'
+printf '%s\n' "[1/2] Reading the project version (building never changes it)..."
+HYDRA_UMC_VERSION_BUILT="$(python3 -c 'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["version"])' "$(dirname "$0")/hydra-umc.project.json")"
+printf '%s\n' "      Building v${HYDRA_UMC_VERSION_BUILT:-unknown} (building never changes the version)"
+echo
 echo "      Done."
 echo
 
@@ -70,3 +61,4 @@ echo " ==============================================================="
 echo "  Build complete. Run ./run.sh to start the collector."
 echo " ==============================================================="
 echo
+printf '%s\n' "Built v${HYDRA_UMC_VERSION_BUILT:-unknown}. Building never changes the version; to raise it run: python tools/hydra_project_tool.py bump"

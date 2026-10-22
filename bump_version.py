@@ -5,16 +5,16 @@
 # GPL-3.0 - see LICENSE
 #
 # Applies the ecosystem-wide "odometer" version bump to this project's own
-# src/version.go (`const Version = "X.Y.Z"`) before every real build:
-# PATCH goes up by 1; if that would push PATCH past 9, it resets to 0 and
-# MINOR goes up by 1 instead (e.g. 0.0.9 -> 0.1.0). MAJOR is never touched
-# by this script - deliberate manual-only decision, same convention across
-# the ecosystem (see the Python bump_version.py in sibling projects such as
-# HYDRA-UMC-DATALAKE for the same pattern applied to pyproject.toml).
+# src/version.go (`const Version = "X.Y.Z"`) on an explicit bump: PATCH goes
+# up by 1; if that would push PATCH past 9, it resets to 0 and MINOR goes up
+# by 1 instead (e.g. 0.0.9 -> 0.1.0). MAJOR is never touched by this script -
+# deliberate manual-only decision, same convention across the ecosystem (see
+# the Python bump_version.py in sibling projects such as HYDRA-UMC-DATALAKE
+# for the same pattern applied to pyproject.toml).
 #
-# Called from build.bat/build.sh right before `go build`, so every real
-# build carries a version 1 higher than the last real build. Also runs
-# standalone (`python bump_version.py`) - stdlib only, no deps.
+# Run only by the explicit bump command (`python tools/hydra_project_tool.py
+# bump`); building never runs it, so a build never changes a version. Also
+# runs standalone (`python bump_version.py`) - stdlib only, no deps.
 # =============================================================================
 from __future__ import annotations
 

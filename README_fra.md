@@ -101,9 +101,9 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── build_test.py     # Vérification de build sans versionnage
 │   └── ci_validate.py    # Validation manifeste/CHANGELOG/docs utilisée par CI
 ├── build/                # Binaires compilés (ignoré par git)
-├── bump_version.py        # Incrément de version native type compteur kilométrique (exécuté par le build)
+├── bump_version.py        # Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)
 ├── bump_manifest_version.py # Synchronise la version de hydra-umc.project.json avec la version native (--sync)
-├── build.sh / build.bat   # Build réel : bump + go build
+├── build.sh / build.bat   # Valide et compile (compiler ne change jamais la version)
 ├── run.sh / run.bat       # Exécution réelle : lance le binaire compilé
 └── README.md
 ```
@@ -130,7 +130,7 @@ build.bat
 run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 ```
 
-`build` incrémente la version (`src/version.go`) et compile le module Go
+`build` ne change jamais la version (seule `python tools/hydra_project_tool.py bump` la fait monter) et compile le module Go
 de `src/` vers `build/telemetry-collector(.exe)`. `run` exécute le binaire
 compilé, en transmettant tout indicateur, et commence à écouter du vrai
 trafic. `-datalake-url` fait pointer les lots vidangés vers une instance
