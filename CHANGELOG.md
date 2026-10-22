@@ -69,18 +69,6 @@ All notable changes to this project are documented here.
 
 ---
 
-## Documentation - Real HTTP API reference
-
-- **`docs/API.md`** (new) - every real endpoint (`POST /ingest/can`,
-  `POST /ingest/ws`, `GET /stats`) documented from the actual handler
-  code in `api.go`, the exact 8-byte CAN frame encoding in `telemetry/can.go`
-  (signal type byte + little-endian float32), and every `Stats` field's
-  meaning in `collector.go` - including the exact `buffer: full` error
-  text for the real `503` backpressure case. Documentation-only - no
-  code changed, no version bump.
-
----
-
 ## [0.1.2] - Real sustained-reconnection coverage (50 cycles) for dedup's own reorder window
 
 - New `TestCollector_FiftySustainedReconnectCyclesNeverLeakOrMisbehave`:
@@ -264,3 +252,17 @@ A real gap (P1):
 - **`src/main.go`** - minimal real entry point. No collection logic yet - aggregating per-robot telemetry ahead of HYDRA-UMC-DATALAKE's own ingestion lands in a later pass.
 - **`src/version.go`** - version identity (`Version` constant). Module root is `src/`, not the repo root.
 - **`build.sh` / `build.bat`**, **`run.sh` / `run.bat`** - `go build ./...` from inside `src/` and run the resulting binary.
+
+## Earlier history
+
+### Documentation - Real HTTP API reference
+
+- **`docs/API.md`** (new) - every real endpoint (`POST /ingest/can`,
+  `POST /ingest/ws`, `GET /stats`) documented from the actual handler
+  code in `api.go`, the exact 8-byte CAN frame encoding in `telemetry/can.go`
+  (signal type byte + little-endian float32), and every `Stats` field's
+  meaning in `collector.go` - including the exact `buffer: full` error
+  text for the real `503` backpressure case. Documentation-only - no
+  code changed, no version bump.
+
+---
