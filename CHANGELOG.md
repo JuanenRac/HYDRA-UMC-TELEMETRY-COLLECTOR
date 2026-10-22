@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- Each flush goes to the datalake in one batch request (`POST /ingest/batch`, up to 1000 samples, one transaction) instead of one request per sample; a datalake without that route is detected and the old per-sample delivery is used, and a rejected batch is repeated sample by sample so only the invalid sample is discarded. `-datalake-batch=false` turns it off.
+- `-spool <file>` keeps the samples of a long datalake outage on disk (bounded by `-spool-max-bytes`), keeps accepting new ones meanwhile and replays them first when the datalake is back; it is off by default.
+- `-priority kind=level,...` lets a full buffer drop the least important queued sample for a more important one, counted in `evicted`; it is off by default.
+- `-datalake-permanent-statuses` lists HTTP client errors (for example 401, 403, 404) that discard the sample instead of retrying for ever; the default keeps retrying.
+- `-metrics-token` makes `GET /stats` and `GET /metrics` require a bearer token; the default leaves them open.
+- `GET /stats` and `GET /metrics` report the latency of the last and the slowest flush, the age of the oldest buffered sample, the evicted samples and the spool.
 - Building no longer changes the version; raising it is the explicit `bump` command (`python tools/hydra_project_tool.py bump`). The build scripts only report the version they built, and CI fails if a build script runs a bump.
 - The banner follows the animated style of the ecosystem banners, with the name, the kind and the technologies of the project.
 - Added `tools/hydra_project_tool.py`: the same `validate`, `test`, `version`, `status` and `bump` commands in every repository. The checks run with `HYDRA_UMC_CI=1` and fail if the version changes; only `bump` changes it.

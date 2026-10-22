@@ -9,10 +9,58 @@
 package main
 
 import (
+	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// metricsTokenEnv supplies the bearer token GET /stats and GET /metrics require.
+const metricsTokenEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_METRICS_TOKEN"
+
+// metricsTokenProblem applies the same minimum length as the ingest token.
+func metricsTokenProblem(token string) string {
+	if token != "" && len(token) < minTokenLength {
+		return "the metrics token must be at least 16 characters"
+	}
+	return ""
+}
+
+// parseStatuses reads the -datalake-permanent-statuses list ("401,403,404") into a set. Only
+// client-error statuses can be permanent; 2xx and 5xx are refused so a typo cannot discard
+// samples that a retry would deliver.
+func parseStatuses(list string) (map[int]bool, string) {
+	if strings.TrimSpace(list) == "" {
+		return nil, ""
+	}
+	out := map[int]bool{}
+	for _, part := range strings.Split(list, ",") {
+		code, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil || code < 400 || code > 499 {
+			return nil, fmt.Sprintf("-datalake-permanent-statuses: %q is not an HTTP client-error status (400-499)", strings.TrimSpace(part))
+		}
+		out[code] = true
+	}
+	return out, ""
+}
+
+// parsePriority reads the -priority list ("fault=9,motor_temp=5"); an empty list means no policy.
+func parsePriority(list string) (map[string]int, string) {
+	if strings.TrimSpace(list) == "" {
+		return nil, ""
+	}
+	out := map[string]int{}
+	for _, part := range strings.Split(list, ",") {
+		kind, level, found := strings.Cut(strings.TrimSpace(part), "=")
+		n, err := strconv.Atoi(strings.TrimSpace(level))
+		if !found || strings.TrimSpace(kind) == "" || err != nil {
+			return nil, fmt.Sprintf("-priority: %q is not kind=level", strings.TrimSpace(part))
+		}
+		out[strings.TrimSpace(kind)] = n
+	}
+	return out, ""
+}
 
 // tokenEnv is the environment variable that supplies the ingest bearer token.
 const tokenEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN"

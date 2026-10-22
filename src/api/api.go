@@ -38,6 +38,10 @@ type Options struct {
 	Token string
 	// MaxBodyBytes caps one ingest body; zero means DefaultMaxBodyBytes.
 	MaxBodyBytes int64
+	// MetricsToken, when set, must be presented as "Authorization: Bearer <token>" on
+	// /stats and /metrics too (it may differ from Token, so a scraper needs no write
+	// access). Empty keeps the two routes open.
+	MetricsToken string
 }
 
 type Server struct {
@@ -80,14 +84,31 @@ func writeError(w http.ResponseWriter, status int, err error) {
 // configured everything is allowed; otherwise the bearer token must match, and
 // the comparison takes the same time whatever prefix matched.
 func (s *Server) authorized(r *http.Request) bool {
-	if s.opts.Token == "" {
+	return bearerMatches(r, s.opts.Token)
+}
+
+// bearerMatches is true when expected is empty (nothing to check) or the request carries it as a
+// bearer token.
+func bearerMatches(r *http.Request, expected string) bool {
+	if expected == "" {
 		return true
 	}
 	scheme, presented, found := strings.Cut(r.Header.Get("Authorization"), " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(presented), []byte(s.opts.Token)) == 1
+	return subtle.ConstantTimeCompare([]byte(presented), []byte(expected)) == 1
+}
+
+// guardRead checks the optional metrics token of the two read routes; it returns false after
+// answering 401 itself.
+func (s *Server) guardRead(w http.ResponseWriter, r *http.Request) bool {
+	if bearerMatches(r, s.opts.MetricsToken) {
+		return true
+	}
+	w.Header().Set("WWW-Authenticate", "Bearer")
+	writeError(w, http.StatusUnauthorized, errors.New("a valid bearer token is required"))
+	return false
 }
 
 // guardIngest runs the checks every write route shares: the method, the token
@@ -181,8 +202,18 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("use GET"))
 		return
 	}
+	if !s.guardRead(w, r) {
+		return
+	}
 	stats := s.collector.Stats()
 	writeJSON(w, http.StatusOK, map[string]any{
+		"evicted":           stats.Evicted,
+		"lastFlushMs":       stats.LastFlushMs,
+		"maxFlushMs":        stats.MaxFlushMs,
+		"oldestSampleAgeMs": stats.OldestSampleAgeMs,
+		"spooled":           stats.Spooled,
+		"spoolPending":      stats.SpoolPending,
+		"spoolBytes":        stats.SpoolBytes,
 		"ingested":          stats.Ingested,
 		"ingestErrors":      stats.IngestErrors,
 		"duplicates":        stats.Duplicates,
@@ -230,6 +261,9 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("use GET"))
 		return
 	}
+	if !s.guardRead(w, r) {
+		return
+	}
 	stats := s.collector.Stats()
 	const prefix = "hydra_umc_telemetry_collector_"
 	metrics := []promMetric{
@@ -244,6 +278,13 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		{prefix + "quarantined_total", "Samples permanently discarded because the sink rejected their exact content as invalid (never retried).", "counter", stats.Quarantined},
 		{prefix + "producer_resets_total", "Producers whose sequence counter started over (a restart); their new samples were accepted.", "counter", stats.Resets},
 		{prefix + "producers", "Producers the duplicate check currently remembers (bounded).", "gauge", int64(stats.Sources)},
+		{prefix + "evicted_total", "Queued samples dropped to make room for a more important one (only with a priority policy).", "counter", stats.Evicted},
+		{prefix + "spooled_total", "Samples written to the disk spool during a sink outage.", "counter", stats.Spooled},
+		{prefix + "spool_pending", "Spooled samples not delivered yet.", "gauge", int64(stats.SpoolPending)},
+		{prefix + "spool_bytes", "Bytes of undelivered data in the disk spool.", "gauge", stats.SpoolBytes},
+		{prefix + "last_flush_milliseconds", "How long the last delivery of a batch to the sink took.", "gauge", stats.LastFlushMs},
+		{prefix + "max_flush_milliseconds", "How long the slowest delivery of a batch to the sink took.", "gauge", stats.MaxFlushMs},
+		{prefix + "oldest_sample_age_milliseconds", "Age, by its own timestamp, of the sample that has waited longest in the buffer (0 when empty).", "gauge", stats.OldestSampleAgeMs},
 		{prefix + "in_flight", "Buffer slots held by a batch that is being delivered.", "gauge", int64(stats.InFlight)},
 		{prefix + "buffer_length", "Samples currently sitting in the ring buffer, waiting to be flushed.", "gauge", int64(s.collector.BufferLen())},
 		{prefix + "buffer_capacity", "The ring buffer's own fixed maximum capacity.", "gauge", int64(s.collector.BufferCap())},

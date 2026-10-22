@@ -38,13 +38,15 @@ Normaliza y deduplica entradas heterogéneas, de modo que lecturas como un pico 
 
 ### Características Clave:
 * 🚀 **Ingesta Multi-Protocolo:** Maneja telemetría CAN y WebSocket hoy, sobre una API de ingesta HTTP simple. *(la ingesta gRPC está planeada)*
-* ⚡ **Rendimiento:** pensado para la telemetría de la fábrica, no para capturar un bus: con los valores por defecto el collector entrega hasta 250 muestras por segundo (un lote de 500 cada 2 s, una petición por muestra hacia HYDRA-UMC-DATALAKE); más allá, el búfer se llena y la ingesta responde `503`.
+* ⚡ **Rendimiento:** pensado para la telemetría de la fábrica, no para capturar un bus: con los valores por defecto el collector entrega hasta 250 muestras por segundo (un lote de 500 cada 2 s, en una sola petición por lote hacia HYDRA-UMC-DATALAKE, o una petición por muestra si ese datalake no tiene la ruta de lotes o con `-datalake-batch=false`); más allá, el búfer se llena y la ingesta responde `503`.
 * 🧬 **Normalización de Datos:** Traduce paquetes binarios brutos a un formato JSON estandarizado. *(la salida Protobuf está planeada, no implementada)*
 * 🛡️ **Entrega con búfer:** una muestra que el collector aceptó no se descarta durante una caída de la base de datos o de la red: el lote que se está entregando conserva su sitio, y un búfer lleno rechaza muestras nuevas (`503`) en lugar de tirar las antiguas. El búfer está en memoria, así que reiniciar el collector pierde lo que contiene.
 * 🔁 **Deduplicación Segura ante Reconexión:** Un número de secuencia opcional por productor, rastreado en una ventana de reordenamiento acotada, para que un dispositivo que se reconecta y reenvía sus últimos mensajes sin confirmar nunca infle los conteos de ingesta. *(implementado)*
 * 🧭 **Entrada plausible:** se rechazan (`400`) una marca de tiempo en segundos en vez de milisegundos, o más de 5 minutos por delante del reloj (`-max-future-skew`), y un `sourceId` demasiado largo o con caracteres invisibles; un productor cuyo contador empieza de nuevo tras un reinicio se reconoce (`producerResets` en `GET /stats`) en vez de rechazar sus muestras nuevas como duplicadas. *(implementado)*
 * 🩺 **Diagnóstico Real de Fallos:** Cada fallo de flush se clasifica como un rechazo genuino de los datos por parte del sink frente a un problema de transporte - expuesto en `GET /stats` para una visibilidad operativa real. *(implementado)*
 * 🧮 **Validación de Campos Finitos:** Un nombre de campo vacío o un valor numérico `NaN`/`Infinity`/`-Infinity` se rechaza (`400`) antes de llegar al buffer o a un sink - la decodificación CAN pasa por el mismo `Sample.Validate()` que la ingesta JSON. *(implementado)*
+* 📊 **Métricas Prometheus:** `GET /metrics` expone los mismos contadores en vivo de ingesta y pérdida que sigue `GET /stats` (ingeridas, descartadas, en cuarentena, fallos de envío de transporte frente a datos inválidos, ocupación del búfer) en el formato real de texto de Prometheus. *(implementado)*
+* 🧰 **Caídas, prioridades y métricas protegidas (todo opcional):** `-spool <fichero>` guarda en disco las muestras de una caída larga del datalake (con el límite de `-spool-max-bytes`) y las reenvía primero cuando responde de nuevo; `-priority tipo=nivel,...` permite que un búfer lleno descarte la muestra menos importante por otra más importante (se cuenta en `evicted`); `-datalake-permanent-statuses 401,403,404` descarta en lugar de reintentar para siempre; `-metrics-token` hace que `GET /stats` y `GET /metrics` exijan un token. Informan de la latencia del último y del más lento envío y de la edad de la muestra más antigua del búfer. Todo está desactivado por defecto. *(implementado)*
 
 ---
 
@@ -91,6 +93,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── dedup/            # Deduplicación real por secuencia por productor (ventana de reordenamiento)
 │   ├── collector/        # Orquesta ingesta+flush, reintenta si falla el sink, dedup
 │   ├── sink/              # A donde van los lotes vaciados (ConsoleSink hoy), clasificación transporte/datos inválidos
+│   ├── spool/          # Cola opcional en disco que guarda las muestras de una caída larga del destino
 │   └── api/                # Handlers JSON/HTTP planos que envuelven el collector
 ├── docs/
 │   └── API.md              # Referencia real de endpoints HTTP (peticiones, respuestas, codigos de estado)

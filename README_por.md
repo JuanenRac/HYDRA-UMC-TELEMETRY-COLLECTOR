@@ -38,7 +38,7 @@ Normaliza e deduplica entradas heterogéneas, para que leituras como um pico de 
 
 ### Funcionalidades principais:
 * 🚀 **Ingestão multiprotocolo:** trata hoje telemetria CAN e WebSocket, através de uma API de ingestão HTTP simples. *(a ingestão gRPC está planeada)*
-* ⚡ **Débito:** pensado para a telemetria da fábrica, não para capturar um barramento: com os valores por defeito o collector entrega até 250 amostras por segundo (um lote de 500 a cada 2 s, um pedido por amostra para o HYDRA-UMC-DATALAKE); acima disso o buffer enche-se e a ingestão responde `503`.
+* ⚡ **Débito:** pensado para a telemetria da fábrica, não para capturar um barramento: com os valores por defeito o collector entrega até 250 amostras por segundo (um lote de 500 a cada 2 s, num único pedido por lote para o HYDRA-UMC-DATALAKE, ou um pedido por amostra se esse datalake não tiver a rota de lotes ou com `-datalake-batch=false`); acima disso o buffer enche-se e a ingestão responde `503`.
 * 🧬 **Normalização de dados:** traduz pacotes binários em bruto para um formato JSON padronizado. *(a saída em Protobuf está planeada, não implementada)*
 * 🛡️ **Entrega com buffer:** uma amostra que o collector aceitou não é descartada durante uma falha da base de dados ou da rede: o lote que está a ser entregue mantém o seu lugar, e um buffer cheio recusa amostras novas (`503`) em vez de largar as antigas. O buffer está em memória, pelo que reiniciar o collector perde o que ele contém.
 * 🔁 **Deduplicação segura contra religações:** um número de sequência opcional por produtor, acompanhado numa janela de reordenação limitada, para que um dispositivo que volta a ligar-se e reenvia as suas últimas mensagens sem confirmação nunca infle as contagens de ingestão. *(implementado)*
@@ -46,6 +46,7 @@ Normaliza e deduplica entradas heterogéneas, para que leituras como um pico de 
 * 🩺 **Diagnóstico real de falhas:** cada falha de descarga é classificada como o destino ter rejeitado genuinamente os dados ou como um problema de transporte - exposto no `GET /stats` para visibilidade operacional real. *(implementado)*
 * 🧮 **Validação de campos finitos:** um nome de campo vazio ou um valor numérico `NaN`/`Infinity`/`-Infinity` é rejeitado (`400`) antes de chegar à memória intermédia ou a um destino - a descodificação CAN passa exatamente pela mesma verificação `Sample.Validate()` que a ingestão JSON. *(implementado)*
 * 📊 **Métricas Prometheus:** o `GET /metrics` expõe os mesmos contadores em direto de ingestão e de taxa de perda que o `GET /stats` acompanha (ingeridos, descartados, em quarentena, falhas de descarga de transporte vs. dados inválidos, ocupação da memória intermédia) no formato real de exposição de texto do Prometheus. *(implementado)*
+* 🧰 **Falhas, prioridades e métricas protegidas (tudo opcional):** `-spool <ficheiro>` guarda em disco as amostras de uma falha longa do datalake (limitada por `-spool-max-bytes`) e reenvia-as primeiro quando ele voltar a responder; `-priority tipo=nível,...` deixa um buffer cheio descartar a amostra menos importante por outra mais importante (contado em `evicted`); `-datalake-permanent-statuses 401,403,404` descarta em vez de tentar para sempre; `-metrics-token` faz `GET /stats` e `GET /metrics` exigirem um token. Indicam a latência do último e do mais lento envio e a idade da amostra mais antiga no buffer. Tudo está desligado por defeito. *(implementado)*
 
 ---
 
@@ -92,6 +93,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── dedup/           # Deduplicação real de sequências por produtor (janela de reordenação)
 │   ├── collector/      # Orquestra ingestão e descarga, repete em caso de falha do destino, deduplicação
 │   ├── sink/           # Para onde vão os lotes descarregados (ConsoleSink hoje), classificação transporte/dados inválidos
+│   ├── spool/          # Fila opcional em disco que guarda as amostras de uma falha longa do destino
 │   └── api/             # Handlers JSON/HTTP simples que envolvem o collector
 ├── docs/
 │   └── API.md           # Referência real dos endpoints HTTP (pedidos, respostas, códigos de estado)

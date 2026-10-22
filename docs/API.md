@@ -9,13 +9,13 @@ one sample in the collector's own JSON shape (despite the name, it is a plain HT
 `POST`, not a WebSocket); something else has to read the bus or the stream and
 forward it here, and no component of the ecosystem does yet.
 
-Towards HYDRA-UMC-DATALAKE the collector sends `Authorization: Bearer <token>` with every sample when `-datalake-token` (or `HYDRA_UMC_DATALAKE_TOKEN`) is set; a datalake that requires a token and does not get a valid one answers `401`, and the samples wait in the buffer.
+Towards HYDRA-UMC-DATALAKE the collector delivers each flush with the datalake's `POST /ingest/batch` (up to 1000 samples per request, one transaction); a datalake that has no such route (`404`/`405`) is remembered and the collector goes back to one `POST /ingest` per sample, and a batch the datalake rejects as a whole (`400`/`413`) is repeated sample by sample so that only the invalid one is discarded. `-datalake-batch=false` always uses one request per sample. It sends `Authorization: Bearer <token>` with every sample when `-datalake-token` (or `HYDRA_UMC_DATALAKE_TOKEN`) is set; a datalake that requires a token and does not get a valid one answers `401`, and the samples wait in the buffer.
 
 Authentication is optional. Started with a token (`-token`, or the
 `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` environment variable; at least 16
 characters), the two `POST /ingest/*` routes require
 `Authorization: Bearer <token>` and answer `401` (`WWW-Authenticate: Bearer`)
-otherwise; `GET /stats` and `GET /metrics` stay open. Without a token the
+otherwise; `GET /stats` and `GET /metrics` stay open unless `-metrics-token` (or `HYDRA_UMC_TELEMETRY_COLLECTOR_METRICS_TOKEN`, at least 16 characters) is set: they then require `Authorization: Bearer <that token>` (a different token from the ingest one, so a scraper needs no write access) and answer `401` otherwise. Without a token the
 collector only starts on a loopback address: a non-loopback `-addr` is refused
 unless `-allow-anonymous` is passed. A request body larger than 1 MiB is
 refused with `413` and never read in full.
@@ -121,6 +121,19 @@ A producer that **restarts** begins its counter again, far behind everything it 
 - `producerResets` / `producers` - producers whose counter started over (a restart) and producers currently remembered by the duplicate check.
 - `inFlight` - buffer slots held by the batch being delivered.
 - `bufferLen` / `bufferCap` - current vs. maximum ring buffer occupancy.
+- `evicted` - queued samples dropped to make room for a more important one; only possible with `-priority` (see below), and not part of `dropped`.
+- `lastFlushMs` / `maxFlushMs` - how long the last and the slowest delivery of a batch to the sink took.
+- `oldestSampleAgeMs` - age, by its own `timestamp`, of the sample that has waited longest in the buffer (`0` when it is empty).
+- `spooled` / `spoolPending` / `spoolBytes` - samples written to the disk spool, and what it still holds (all `0` without `-spool`).
+
+## Optional protections and queues (all off by default)
+
+| Flag | What it does |
+|---|---|
+| `-spool <file>` | A sink failure writes the batch to this file (one JSON line per sample) instead of keeping it in memory, so the buffer keeps accepting samples during a long outage. When the sink answers again the spool is replayed before anything newer. Bounded by `-spool-max-bytes` (default 256 MiB); a full spool falls back to keeping the batch in memory. What a previous run left in the file is replayed at start. Delivery is at least once: after a crash a batch can be delivered twice, and HYDRA-UMC-DATALAKE stores a point once per `(source, kind, field, timestamp)`. |
+| `-priority kind=level,...` and `-priority-default <n>` | A full buffer drops the least important queued sample (the oldest among equals) to take a more important one; without it a full buffer refuses new samples with `503`. Dropped ones are counted in `evicted`. |
+| `-datalake-permanent-statuses 401,403,404` | HTTP client errors (400-499) from the datalake that discard the sample (it is counted as `quarantined`) instead of waiting for the configuration to be fixed. Default empty: they wait. |
+| `-metrics-token` | Makes `GET /stats` and `GET /metrics` require a bearer token. |
 
 ---
 

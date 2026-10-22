@@ -76,3 +76,36 @@ func TestFlagProblem(t *testing.T) {
 		}
 	}
 }
+
+func TestParseStatusesAcceptsOnlyClientErrors(t *testing.T) {
+	got, problem := parseStatuses("401, 403,404")
+	if problem != "" || len(got) != 3 || !got[401] || !got[403] || !got[404] {
+		t.Fatalf("parseStatuses = %v %q", got, problem)
+	}
+	if got, problem := parseStatuses(""); got != nil || problem != "" {
+		t.Fatalf("an empty list keeps the default: %v %q", got, problem)
+	}
+	for _, bad := range []string{"200", "503", "abc", "401,,404", "399"} {
+		if _, problem := parseStatuses(bad); problem == "" {
+			t.Errorf("%q must be refused", bad)
+		}
+	}
+}
+
+func TestParsePriorityReadsKindLevelPairs(t *testing.T) {
+	got, problem := parsePriority("fault=9, motor_temp=5")
+	if problem != "" || got["fault"] != 9 || got["motor_temp"] != 5 {
+		t.Fatalf("parsePriority = %v %q", got, problem)
+	}
+	for _, bad := range []string{"fault", "=3", "fault=x"} {
+		if _, problem := parsePriority(bad); problem == "" {
+			t.Errorf("%q must be refused", bad)
+		}
+	}
+}
+
+func TestMetricsTokenNeedsTheSameMinimumLengthAsTheIngestToken(t *testing.T) {
+	if metricsTokenProblem("short") == "" || metricsTokenProblem("") != "" || metricsTokenProblem("0123456789abcdef") != "" {
+		t.Fatal("metricsTokenProblem does not follow the minimum length")
+	}
+}

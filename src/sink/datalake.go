@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
@@ -132,7 +133,26 @@ type DatalakeSink struct {
 	// Token, when set, is sent as `Authorization: Bearer <token>` with every sample: the
 	// datalake can require one for writing (it also guards the deletion of the history).
 	Token string
+	// Batch sends each flush with DATALAKE's POST /ingest/batch (one request and one
+	// transaction per MaxBatch samples) instead of one request per sample. A datalake
+	// that does not have the route (404 or 405) is remembered and the sink goes back to
+	// one request per sample; a batch the datalake rejects as a whole (400 or 413) is
+	// repeated sample by sample, so the one invalid sample is found and quarantined.
+	Batch bool
+	// MaxBatch caps the samples of one batch request; zero means DefaultMaxBatch.
+	MaxBatch int
+	// PermanentStatuses lists extra HTTP statuses (for example 401, 403, 404) that are
+	// treated like a 400: the sample is quarantined instead of being retried for ever.
+	// The default is empty: a wrong token or URL is a configuration problem that fixing
+	// the configuration repairs, so those samples wait.
+	PermanentStatuses map[int]bool
+
+	batchUnsupported atomic.Bool
 }
+
+// DefaultMaxBatch is how many samples one batch request carries when MaxBatch is not set
+// (the largest batch HYDRA-UMC-DATALAKE accepts by default).
+const DefaultMaxBatch = 1000
 
 // NewDatalakeSink returns a DatalakeSink with a real, bounded-timeout
 // HTTP client (5s per request) - a hung DATALAKE must not hang the
@@ -145,10 +165,84 @@ func NewDatalakeSink(baseURL string) *DatalakeSink {
 }
 
 func (d *DatalakeSink) Write(batch []telemetry.Sample) error {
-	for i, s := range batch {
+	if d.Batch && !d.batchUnsupported.Load() {
+		return d.writeBatched(batch)
+	}
+	return d.writeEach(batch, 0, len(batch))
+}
+
+func (d *DatalakeSink) maxBatch() int {
+	if d.MaxBatch > 0 {
+		return d.MaxBatch
+	}
+	return DefaultMaxBatch
+}
+
+// writeBatched sends the batch in chunks to POST /ingest/batch. Every chunk before the
+// one that fails is confirmed, so a failure is reported with that count (PartialWriteError)
+// and the collector retries only the rest.
+func (d *DatalakeSink) writeBatched(batch []telemetry.Sample) error {
+	size := d.maxBatch()
+	for start := 0; start < len(batch); start += size {
+		end := start + size
+		if end > len(batch) {
+			end = len(batch)
+		}
+		status, body, err := d.postBatch(batch[start:end])
+		switch {
+		case err != nil:
+			return &PartialWriteError{Err: fmt.Errorf("sink: datalake: batch of %d samples: %w", end-start, err), Succeeded: start}
+		case status == http.StatusAccepted:
+			continue
+		case status == http.StatusNotFound || status == http.StatusMethodNotAllowed:
+			// an older datalake without the route: one request per sample from now on
+			d.batchUnsupported.Store(true)
+			return d.writeEach(batch[start:], start, len(batch))
+		case status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge || d.PermanentStatuses[status]:
+			// the batch is all or nothing and nothing was stored: sample by sample finds the culprit
+			return d.writeEach(batch[start:], start, len(batch))
+		default:
+			return &PartialWriteError{
+				Err:       fmt.Errorf("sink: datalake: batch of %d samples: datalake returned HTTP %d: %s", end-start, status, body),
+				Succeeded: start,
+			}
+		}
+	}
+	return nil
+}
+
+func (d *DatalakeSink) postBatch(samples []telemetry.Sample) (int, string, error) {
+	payload, err := json.Marshal(struct {
+		Samples []telemetry.Sample `json:"samples"`
+	}{samples})
+	if err != nil {
+		return 0, "", fmt.Errorf("marshal: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, d.BaseURL+"/ingest/batch", bytes.NewReader(payload))
+	if err != nil {
+		return 0, "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if d.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+d.Token)
+	}
+	resp, err := d.Client.Do(req)
+	if err != nil {
+		return 0, "", fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return resp.StatusCode, string(body), nil
+}
+
+// writeEach writes the samples one request each. base is the position of samples[0] in the
+// batch the caller was given (total samples), so the indexes it reports are batch positions.
+func (d *DatalakeSink) writeEach(samples []telemetry.Sample, base, total int) error {
+	for j, s := range samples {
+		i := base + j
 		if err := d.writeOne(s); err != nil {
 			wrapped := fmt.Errorf("sink: datalake: sample %d/%d (sourceId=%q kind=%q): %w",
-				i+1, len(batch), s.SourceID, s.Kind, err)
+				i+1, total, s.SourceID, s.Kind, err)
 			// writeOne has no notion of "batch position" - stamp
 			// it here, where i is known, so collector.go can quarantine
 			// exactly this one sample instead of the whole batch. err is
@@ -199,7 +293,7 @@ func (d *DatalakeSink) writeOne(s telemetry.Sample) error {
 		// permanent for these exact bytes. 401, 403 and 404 are NOT here: a wrong token or
 		// URL is a configuration problem that fixing the configuration repairs, so the
 		// samples wait instead of being discarded.
-		if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusRequestEntityTooLarge {
+		if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusRequestEntityTooLarge || d.PermanentStatuses[resp.StatusCode] {
 			// DATALAKE's own api.py returns 400 specifically when it
 			// validated and rejected this sample's content - a real,
 			// permanent rejection of these exact bytes, not a transient

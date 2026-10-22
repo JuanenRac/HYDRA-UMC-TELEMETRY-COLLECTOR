@@ -184,6 +184,17 @@ func (r *Ring) InFlight() int {
 	return r.inflight
 }
 
+// OldestTimestamp is the timestamp (unix milliseconds) of the sample at the front of the
+// queue, the oldest one waiting to be delivered; false when nothing is queued.
+func (r *Ring) OldestTimestamp() (int64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.items) == 0 {
+		return 0, false
+	}
+	return r.items[0].Timestamp, true
+}
+
 func (r *Ring) Len() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()

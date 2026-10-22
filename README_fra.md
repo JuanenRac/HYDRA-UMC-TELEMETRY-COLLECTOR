@@ -38,13 +38,15 @@ Elle normalise et dédoublonne des entrées hétérogènes, afin que des mesures
 
 ### Caractéristiques principales :
 * 🚀 **Ingestion multiprotocole :** Gère la télémétrie CAN et WebSocket aujourd'hui, via une API d'ingestion HTTP simple. *(l'ingestion gRPC est prévue)*
-* ⚡ **Débit :** conçu pour la télémétrie de l'usine, pas pour une capture de bus : avec les valeurs par défaut, le collector livre jusqu'à 250 échantillons par seconde (un lot de 500 toutes les 2 s, une requête par échantillon vers HYDRA-UMC-DATALAKE) ; au-delà, le tampon se remplit et l'ingestion répond `503`.
+* ⚡ **Débit :** conçu pour la télémétrie de l'usine, pas pour une capture de bus : avec les valeurs par défaut, le collector livre jusqu'à 250 échantillons par seconde (un lot de 500 toutes les 2 s, en une seule requête par lot vers HYDRA-UMC-DATALAKE, ou une requête par échantillon si ce datalake n'a pas la route de lots ou avec `-datalake-batch=false`) ; au-delà, le tampon se remplit et l'ingestion répond `503`.
 * 🧬 **Normalisation des données :** Traduit les paquets binaires bruts en un format JSON standardisé. *(la sortie Protobuf est planifiée, non implémentée)*
 * 🛡️ **Livraison tamponnée :** un échantillon que le collector a accepté n'est pas jeté pendant une panne de la base de données ou du réseau : le lot en cours de livraison garde sa place, et un tampon plein refuse les nouveaux échantillons (`503`) au lieu d'abandonner les anciens. Le tampon est en mémoire : redémarrer le collector perd son contenu.
 * 🔁 **Déduplication sûre en cas de reconnexion :** Un numéro de séquence optionnel par producteur, suivi dans une fenêtre de réordonnancement bornée, pour qu'un appareil qui se reconnecte et renvoie ses derniers messages non acquittés ne gonfle jamais les comptes d'ingestion. *(implémenté)*
 * 🧭 **Entrées plausibles :** un horodatage en secondes au lieu de millisecondes, ou de plus de 5 minutes en avance sur l'horloge (`-max-future-skew`), et un `sourceId` trop long ou avec des caractères invisibles sont refusés (`400`) ; un producteur dont le compteur repart de zéro après un redémarrage est reconnu (`producerResets` dans `GET /stats`) au lieu de voir ses nouveaux échantillons rejetés comme doublons. *(implémenté)*
 * 🩺 **Diagnostic réel des échecs :** Chaque échec de vidage est classé comme un rejet réel des données par le sink par rapport à un problème de transport - exposé dans `GET /stats` pour une visibilité opérationnelle réelle. *(implémenté)*
 * 🧮 **Validation de champs finis :** Un nom de champ vide ou une valeur numérique `NaN`/`Infinity`/`-Infinity` est rejeté (`400`) avant d'atteindre le buffer ou un sink - le décodage CAN passe par le même `Sample.Validate()` que l'ingestion JSON. *(implémenté)*
+* 📊 **Métriques Prometheus :** `GET /metrics` expose les mêmes compteurs en direct d'ingestion et de perte que `GET /stats` (ingérés, abandonnés, en quarantaine, échecs d'envoi de transport ou de données invalides, occupation du tampon) au vrai format texte de Prometheus. *(implémenté)*
+* 🧰 **Pannes, priorités et métriques protégées (tout est optionnel) :** `-spool <fichier>` garde sur disque les échantillons d'une longue panne du datalake (limitée par `-spool-max-bytes`) et les renvoie d'abord quand il répond de nouveau ; `-priority type=niveau,...` permet à un tampon plein d'abandonner l'échantillon le moins important pour un plus important (compté dans `evicted`) ; `-datalake-permanent-statuses 401,403,404` abandonne au lieu de réessayer indéfiniment ; `-metrics-token` fait exiger un jeton par `GET /stats` et `GET /metrics`. Ils indiquent la latence du dernier et du plus lent envoi et l'âge du plus ancien échantillon du tampon. Tout est désactivé par défaut. *(implémenté)*
 
 ---
 
@@ -91,6 +93,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── dedup/            # Déduplication réelle par séquence par producteur (fenêtre de réordonnancement)
 │   ├── collector/        # Orchestre ingestion+vidage, réessaie si le sink échoue, dédup
 │   ├── sink/              # Où vont les lots vidés (ConsoleSink aujourd'hui), classification transport/données invalides
+│   ├── spool/          # File optionnelle sur disque qui garde les échantillons d'une longue panne de la destination
 │   └── api/                # Handlers JSON/HTTP simples encapsulant le collecteur
 ├── docs/
 │   └── API.md              # Référence réelle des endpoints HTTP (requêtes, réponses, codes de statut)

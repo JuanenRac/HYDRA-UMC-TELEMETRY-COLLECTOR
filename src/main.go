@@ -29,8 +29,10 @@ import (
 	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/api"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/spool"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
 )
 
@@ -48,12 +50,35 @@ func main() {
 	token := flag.String("token", os.Getenv(tokenEnv), "bearer token the ingest routes require (default: $"+tokenEnv+"); empty leaves them open")
 	futureSkew := flag.Duration("max-future-skew", telemetry.MaxFutureSkew, "how far ahead of this machine's clock a sample timestamp may be (0 turns the check off)")
 	datalakeToken := flag.String("datalake-token", os.Getenv(datalakeTokenEnv), "bearer token sent to HYDRA-UMC-DATALAKE with every sample (default: $"+datalakeTokenEnv+")")
+	metricsToken := flag.String("metrics-token", os.Getenv(metricsTokenEnv), "bearer token GET /stats and GET /metrics require (default: $"+metricsTokenEnv+"); empty leaves them open")
+	batch := flag.Bool("datalake-batch", true, "send each flush to DATALAKE's POST /ingest/batch (falls back to one request per sample when the datalake has no such route)")
+	permanentStatuses := flag.String("datalake-permanent-statuses", "", "comma-separated extra HTTP statuses (for example 401,403,404) the datalake may answer that discard the sample instead of retrying it for ever; empty keeps retrying")
+	spoolPath := flag.String("spool", "", "file that holds the samples of a datalake outage on disk instead of in memory (empty: no spool)")
+	spoolMax := flag.Int64("spool-max-bytes", 256<<20, "most unsent bytes the -spool file may hold")
+	priority := flag.String("priority", "", "kind=level pairs (for example fault=9,motor_temp=5) that let a full buffer drop the least important queued sample for a more important one; empty keeps plain backpressure")
+	priorityDefault := flag.Int("priority-default", 0, "level of the kinds that -priority does not list")
 	allowAnonymous := flag.Bool("allow-anonymous", false, "allow a non-loopback -addr with no token (the ingest routes are then open to the whole network)")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
 
 	if problem := flagProblem(*bufferCap, *batchSize, *flushInterval); problem != "" {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
+		os.Exit(2)
+	}
+	statuses, problem := parseStatuses(*permanentStatuses)
+	if problem == "" {
+		problem = metricsTokenProblem(*metricsToken)
+	}
+	var priorityTable map[string]int
+	if problem == "" {
+		priorityTable, problem = parsePriority(*priority)
+	}
+	if problem != "" {
+		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
+		os.Exit(2)
+	}
+	if *spoolMax < 1 {
+		fmt.Fprintln(os.Stderr, "[telemetry-collector] -spool-max-bytes must be at least 1")
 		os.Exit(2)
 	}
 	if problem := startupProblem(*addr, *token, *allowAnonymous); problem != "" {
@@ -68,6 +93,8 @@ func main() {
 	if *datalakeURL != "" {
 		lake := sink.NewDatalakeSink(*datalakeURL)
 		lake.Token = *datalakeToken
+		lake.Batch = *batch
+		lake.PermanentStatuses = statuses
 		s = lake
 		fmt.Printf("[telemetry-collector] delivering to HYDRA-UMC-DATALAKE at %s\n", *datalakeURL)
 	} else {
@@ -76,7 +103,19 @@ func main() {
 	}
 
 	c := collector.New(*bufferCap, s)
-	server := api.NewWithOptions(c, api.Options{Token: *token})
+	if *spoolPath != "" {
+		sp, err := spool.Open(*spoolPath, *spoolMax)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] "+err.Error())
+			os.Exit(2)
+		}
+		c.SetSpool(sp)
+		fmt.Printf("[telemetry-collector] outages are kept on disk in %s (%d samples already waiting)\n", *spoolPath, sp.Pending())
+	}
+	if priorityTable != nil {
+		c.SetPriority(buffer.PriorityByKind(priorityTable, *priorityDefault))
+	}
+	server := api.NewWithOptions(c, api.Options{Token: *token, MetricsToken: *metricsToken})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

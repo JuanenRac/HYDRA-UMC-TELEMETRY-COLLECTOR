@@ -38,13 +38,15 @@ Es normalisiert und dedupliziert heterogene Eingaben, sodass Messwerte wie eine 
 
 ### Hauptmerkmale:
 * 🚀 **Multi-Protokoll-Ingestion:** Verarbeitet heute CAN- und WebSocket-Telemetrie über eine einfache HTTP-Ingest-API. *(gRPC-Ingestion ist geplant)*
-* ⚡ **Durchsatz:** ausgelegt für die Telemetrie der Fabrik, nicht für einen Bus-Mitschnitt: mit den Standardwerten liefert der Collector bis zu 250 Samples pro Sekunde (ein Stapel von 500 alle 2 s, eine Anfrage pro Sample an HYDRA-UMC-DATALAKE); darüber füllt sich der Puffer und die Aufnahme antwortet mit `503`.
+* ⚡ **Durchsatz:** ausgelegt für die Telemetrie der Fabrik, nicht für einen Bus-Mitschnitt: mit den Standardwerten liefert der Collector bis zu 250 Samples pro Sekunde (ein Stapel von 500 alle 2 s, in einer Stapelanfrage an HYDRA-UMC-DATALAKE, oder eine Anfrage pro Sample, wenn dieses Datalake keine Stapel-Route hat oder mit `-datalake-batch=false`); darüber füllt sich der Puffer und die Aufnahme antwortet mit `503`.
 * 🧬 **Daten-Normalisierung:** Übersetzt rohe Binärpakete in ein standardisiertes JSON-Format. *(Protobuf-Ausgabe ist geplant, nicht implementiert)*
 * 🛡️ **Gepufferte Auslieferung:** ein vom Collector angenommenes Sample wird bei einem Ausfall der Datenbank oder des Netzes nicht verworfen: der Stapel, der gerade ausgeliefert wird, behält seinen Platz, und ein voller Puffer weist neue Samples ab (`503`), statt alte zu verwerfen. Der Puffer liegt im Speicher; ein Neustart des Collectors verliert also seinen Inhalt.
 * 🔁 **Reconnect-sichere Deduplizierung:** Eine optionale Sequenznummer pro Produzent, verfolgt in einem begrenzten Reorder-Fenster, sodass ein Gerät, das sich neu verbindet und seine letzten unbestätigten Nachrichten erneut sendet, die Ingest-Zählungen niemals aufbläht. *(implementiert)*
 * 🧭 **Plausible Eingaben:** ein Zeitstempel in Sekunden statt Millisekunden oder mehr als 5 Minuten der Uhr voraus (`-max-future-skew`) sowie eine zu lange `sourceId` oder eine mit unsichtbaren Zeichen werden abgewiesen (`400`); ein Produzent, dessen Zähler nach einem Neustart von vorn beginnt, wird erkannt (`producerResets` in `GET /stats`), statt dass seine neuen Samples als Duplikate abgewiesen werden. *(implementiert)*
 * 🩺 **Echte Fehlerdiagnose:** Jeder Flush-Fehler wird klassifiziert als echte Ablehnung der Daten durch den Sink gegenüber einem Transportproblem - offengelegt in `GET /stats` für echte operative Sichtbarkeit. *(implementiert)*
 * 🧮 **Validierung endlicher Felder:** Ein leerer Feldname oder ein `NaN`/`Infinity`/`-Infinity`-Zahlenwert wird abgelehnt (`400`), bevor er den Puffer oder einen Sink erreicht - die CAN-Dekodierung durchläuft dieselbe `Sample.Validate()`-Prüfung wie die JSON-Aufnahme. *(implementiert)*
+* 📊 **Prometheus-Metriken:** `GET /metrics` stellt dieselben Live-Zähler für Aufnahme und Verluste bereit wie `GET /stats` (aufgenommen, verworfen, in Quarantäne, Sendefehler durch Transport bzw. ungültige Daten, Pufferbelegung) im echten Prometheus-Textformat. *(implementiert)*
+* 🧰 **Ausfälle, Prioritäten und geschützte Metriken (alles optional):** `-spool <Datei>` hält die Samples eines langen Datalake-Ausfalls auf der Platte (begrenzt durch `-spool-max-bytes`) und sendet sie zuerst erneut, wenn es wieder antwortet; mit `-priority art=stufe,...` darf ein voller Puffer das unwichtigste Sample für ein wichtigeres verwerfen (gezählt in `evicted`); `-datalake-permanent-statuses 401,403,404` verwirft, statt ewig zu wiederholen; `-metrics-token` verlangt für `GET /stats` und `GET /metrics` ein Bearer-Token. Gemeldet werden die Latenz des letzten und des langsamsten Sendens und das Alter des ältesten gepufferten Samples. Alles ist standardmäßig aus. *(implementiert)*
 
 ---
 
@@ -91,6 +93,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── dedup/            # Echte Deduplizierung per Sequenz pro Produzent (Reorder-Fenster)
 │   ├── collector/        # Orchestriert Ingest+Flush, wiederholt bei Sink-Fehler, Dedup
 │   ├── sink/              # Wohin geflushte Batches gehen (heute ConsoleSink), Transport-/Invalid-Data-Klassifizierung
+│   ├── spool/          # Optionale Warteschlange auf der Platte für die Samples eines langen Ausfalls des Ziels
 │   └── api/                # Einfache JSON/HTTP-Handler, die den Collector umschließen
 ├── docs/
 │   └── API.md              # Echte HTTP-Endpunktreferenz (Requests, Responses, Statuscodes)

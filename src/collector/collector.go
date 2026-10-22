@@ -20,6 +20,7 @@ import (
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/dedup"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/spool"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
 )
 
@@ -61,6 +62,21 @@ type Stats struct {
 	Sources int
 	// InFlight is how many buffered slots a batch being delivered holds.
 	InFlight int
+	// Evicted counts queued samples dropped to make room for a more important one when a
+	// priority policy is configured (they are not part of Dropped).
+	Evicted int64
+	// LastFlushMs and MaxFlushMs are how long the last and the slowest delivery of a batch
+	// to the sink took, successful or not.
+	LastFlushMs int64
+	MaxFlushMs  int64
+	// OldestSampleAgeMs is how old, by its own timestamp, the sample that has waited longest
+	// in the buffer is; 0 when the buffer is empty.
+	OldestSampleAgeMs int64
+	// Spooled counts samples written to the disk spool; SpoolPending and SpoolBytes are what it
+	// holds now (all zero without a spool).
+	Spooled      int64
+	SpoolPending int
+	SpoolBytes   int64
 }
 
 type Collector struct {
@@ -77,6 +93,67 @@ type Collector struct {
 	transportErrors   atomic.Int64
 	dropped           atomic.Int64
 	quarantined       atomic.Int64
+	spooled           atomic.Int64
+	lastFlushNanos    atomic.Int64
+	maxFlushNanos     atomic.Int64
+
+	spool *spool.File
+}
+
+// SetSpool makes a sink outage write the failed batches to the disk spool instead of keeping
+// them in memory, and replays the spool before anything newer once the sink answers again.
+// Call it before the collector runs. A nil spool (the default) keeps the in-memory behaviour.
+func (c *Collector) SetSpool(s *spool.File) { c.spool = s }
+
+// SetPriority sets the policy a full buffer uses to make room for a more important sample
+// (higher numbers matter more); nil keeps plain backpressure. Call it before the collector runs.
+func (c *Collector) SetPriority(priority func(telemetry.Sample) int) { c.buf.SetPriority(priority) }
+
+// write delivers a batch to the sink and records how long it took.
+func (c *Collector) write(batch []telemetry.Sample) error {
+	started := time.Now()
+	err := c.sink.Write(batch)
+	elapsed := time.Since(started).Nanoseconds()
+	c.lastFlushNanos.Store(elapsed)
+	for {
+		current := c.maxFlushNanos.Load()
+		if elapsed <= current || c.maxFlushNanos.CompareAndSwap(current, elapsed) {
+			break
+		}
+	}
+	return err
+}
+
+// replaySpool delivers one batch of spooled samples. alive is false when the sink did not accept
+// the batch for a transport reason, so the caller knows not to try the sink again this round.
+func (c *Collector) replaySpool(batchSize int) (delivered int, alive bool) {
+	entries, err := c.spool.Next(batchSize)
+	if err != nil || len(entries) == 0 {
+		return 0, err == nil
+	}
+	batch := make([]telemetry.Sample, len(entries))
+	for i, e := range entries {
+		batch[i] = e.Sample
+	}
+	if err := c.write(batch); err != nil {
+		c.flushErrors.Add(1)
+		if invalid, ok := sink.AsInvalidData(err); ok && invalid.Index >= 0 && invalid.Index < len(entries) {
+			// the sink will never take this one: discard it (and what was confirmed before it)
+			c.invalidDataErrors.Add(1)
+			c.quarantined.Add(1)
+			c.spool.Ack(entries[invalid.Index].End)
+			return 0, true
+		}
+		c.transportErrors.Add(1)
+		if partial, ok := sink.AsPartialWrite(err); ok && partial.Succeeded > 0 && partial.Succeeded <= len(entries) {
+			c.spool.Ack(entries[partial.Succeeded-1].End)
+			c.flushed.Add(int64(partial.Succeeded))
+		}
+		return 0, false
+	}
+	c.spool.Ack(entries[len(entries)-1].End)
+	c.flushed.Add(int64(len(batch)))
+	return len(batch), true
 }
 
 // New builds a Collector backed by a bounded buffer of the given
@@ -175,6 +252,19 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 // Returns the number of samples actually flushed (0 on failure or an
 // empty buffer).
 func (c *Collector) FlushOnce(batchSize int) int {
+	delivered := 0
+	// With a spool, what an earlier outage left on disk goes first. If the sink is still down
+	// the new batch is spooled too (below) instead of being tried against it again.
+	sinkDown := false
+	if c.spool != nil && c.spool.Pending() > 0 {
+		var alive bool
+		delivered, alive = c.replaySpool(batchSize)
+		sinkDown = !alive
+	}
+	return delivered + c.flushBuffer(batchSize, sinkDown)
+}
+
+func (c *Collector) flushBuffer(batchSize int, sinkDown bool) int {
 	// The batch keeps its slots reserved until it is settled, so what is
 	// ingested while it is being written cannot take the room it needs to
 	// come back to on a failure: a sink outage makes the buffer fill up (and
@@ -183,7 +273,12 @@ func (c *Collector) FlushOnce(batchSize int) int {
 	if len(batch) == 0 {
 		return 0
 	}
-	if err := c.sink.Write(batch); err != nil {
+	if sinkDown && c.spool != nil && c.spool.Append(batch) == nil {
+		c.spooled.Add(int64(len(batch)))
+		c.buf.Settle(len(batch), nil)
+		return 0
+	}
+	if err := c.write(batch); err != nil {
 		c.flushErrors.Add(1)
 		// A real, honest distinction for diagnosis: did the SINK reject
 		// this exact data (retrying the
@@ -217,6 +312,12 @@ func (c *Collector) FlushOnce(batchSize int) int {
 		toRequeue := batch
 		if partial, ok := sink.AsPartialWrite(err); ok && partial.Succeeded >= 0 && partial.Succeeded <= len(batch) {
 			toRequeue = batch[partial.Succeeded:]
+		}
+		if c.spool != nil && c.spool.Append(toRequeue) == nil {
+			// a long outage waits on disk, not in memory: the buffer keeps taking new samples
+			c.spooled.Add(int64(len(toRequeue)))
+			c.buf.Settle(len(batch), nil)
+			return 0
 		}
 		dropped := c.buf.Settle(len(batch), toRequeue)
 		if dropped > 0 {
@@ -260,7 +361,25 @@ func (c *Collector) Run(ctx context.Context, interval time.Duration, batchSize i
 }
 
 func (c *Collector) Stats() Stats {
+	var oldestAge int64
+	if ts, ok := c.buf.OldestTimestamp(); ok {
+		if age := time.Now().UnixMilli() - ts; age > 0 {
+			oldestAge = age
+		}
+	}
+	var spoolPending int
+	var spoolBytes int64
+	if c.spool != nil {
+		spoolPending, spoolBytes = c.spool.Pending(), c.spool.Bytes()
+	}
 	return Stats{
+		Evicted:           int64(c.buf.Evicted()),
+		LastFlushMs:       c.lastFlushNanos.Load() / int64(time.Millisecond),
+		MaxFlushMs:        c.maxFlushNanos.Load() / int64(time.Millisecond),
+		OldestSampleAgeMs: oldestAge,
+		Spooled:           c.spooled.Load(),
+		SpoolPending:      spoolPending,
+		SpoolBytes:        spoolBytes,
 		Ingested:          c.ingested.Load(),
 		IngestErrors:      c.ingestErrors.Load(),
 		Duplicates:        c.duplicates.Load(),

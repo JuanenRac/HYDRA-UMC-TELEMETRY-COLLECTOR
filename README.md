@@ -38,7 +38,7 @@ It normalizes and de-duplicates heterogeneous inputs, so that readings such as a
 
 ### Key Features:
 * 🚀 **Multi-Protocol Ingestion:** Handles CAN and WebSocket telemetry today, over a plain HTTP ingest API. *(gRPC ingestion is planned)*
-* ⚡ **Throughput:** built for the factory's telemetry, not for a bus capture: with the defaults the collector delivers up to 250 samples per second (a batch of 500 every 2 s, one request per sample towards HYDRA-UMC-DATALAKE); beyond that the buffer fills up and ingestion answers `503`.
+* ⚡ **Throughput:** built for the factory's telemetry, not for a bus capture: with the defaults the collector delivers up to 250 samples per second (a batch of 500 every 2 s, in one batch request towards HYDRA-UMC-DATALAKE, or one request per sample when that datalake has no batch route or with `-datalake-batch=false`); beyond that the buffer fills up and ingestion answers `503`.
 * 🧬 **Data Normalization:** Translates raw binary packets into a standardized JSON format. *(Protobuf output is planned, not implemented)*
 * 🛡️ **Buffered Delivery:** a sample the collector accepted is not discarded during an outage of the database or the network: the batch being delivered keeps its place, and a full buffer refuses new samples (`503`) instead of dropping old ones. The buffer lives in memory, so restarting the collector loses what it holds.
 * 🔁 **Reconnect-Safe Deduplication:** An optional per-producer sequence number, tracked in a bounded reorder window, so a device that reconnects and resends its last few unacked messages never inflates ingest counts. *(implemented)*
@@ -46,6 +46,7 @@ It normalizes and de-duplicates heterogeneous inputs, so that readings such as a
 * 🩺 **Real Failure Diagnosis:** Every flush failure is classified as the sink genuinely rejecting the data vs. a transport problem - exposed in `GET /stats` for real operational visibility. *(implemented)*
 * 🧮 **Finite Field Validation:** An empty field name or a `NaN`/`Infinity`/`-Infinity` numeric value is rejected (`400`) before it ever reaches the buffer or a sink - CAN decoding runs through the exact same `Sample.Validate()` check as JSON ingestion. *(implemented)*
 * 📊 **Prometheus Metrics:** `GET /metrics` exposes the same live ingestion/drop-rate counters `GET /stats` tracks (ingested, dropped, quarantined, transport vs. invalid-data flush failures, buffer occupancy) in real Prometheus text exposition format. *(implemented)*
+* 🧰 **Outages, priorities and protected metrics (all optional):** `-spool <file>` keeps the samples of a long datalake outage on disk (bounded by `-spool-max-bytes`) and replays them first when it answers again; `-priority kind=level,...` lets a full buffer drop the least important queued sample for a more important one (counted in `evicted`); `-datalake-permanent-statuses 401,403,404` discards instead of retrying for ever; `-metrics-token` makes `GET /stats` and `GET /metrics` require a bearer token. They report the latency of the last and the slowest flush and the age of the oldest buffered sample. All are off by default. *(implemented)*
 
 ---
 
@@ -92,6 +93,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── dedup/           # Real per-producer sequence deduplication (reorder window)
 │   ├── collector/      # Orchestrates ingest+flush, retries on sink failure, dedup
 │   ├── sink/           # Where flushed batches go (ConsoleSink today), transport/invalid-data classification
+│   ├── spool/          # Optional on-disk queue that holds the samples of a long sink outage
 │   └── api/             # Plain JSON/HTTP handlers wrapping the collector
 ├── docs/
 │   └── API.md           # Real HTTP endpoint reference (requests, responses, status codes)

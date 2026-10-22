@@ -38,13 +38,15 @@ Normalizza e deduplica ingressi eterogenei, così che misure come un picco di co
 
 ### Caratteristiche principali:
 * 🚀 **Ingestione multi-protocollo:** Gestisce la telemetria CAN e WebSocket oggi, tramite una semplice API di ingestione HTTP. *(l'ingestione gRPC è pianificata)*
-* ⚡ **Throughput:** pensato per la telemetria della fabbrica, non per catturare un bus: con i valori predefiniti il collector consegna fino a 250 campioni al secondo (un lotto da 500 ogni 2 s, una richiesta per campione verso HYDRA-UMC-DATALAKE); oltre, il buffer si riempie e l'ingestione risponde `503`.
+* ⚡ **Throughput:** pensato per la telemetria della fabbrica, non per catturare un bus: con i valori predefiniti il collector consegna fino a 250 campioni al secondo (un lotto da 500 ogni 2 s, in un'unica richiesta per lotto verso HYDRA-UMC-DATALAKE, oppure una richiesta per campione se quel datalake non ha la rotta dei lotti o con `-datalake-batch=false`); oltre, il buffer si riempie e l'ingestione risponde `503`.
 * 🧬 **Normalizzazione dei dati:** Traduce i pacchetti binari grezzi in un formato JSON standardizzato. *(l'output Protobuf è pianificato, non implementato)*
 * 🛡️ **Consegna con buffer:** un campione che il collector ha accettato non viene scartato durante un'interruzione del database o della rete: il lotto in consegna mantiene il suo posto e un buffer pieno rifiuta i campioni nuovi (`503`) invece di scartare quelli vecchi. Il buffer è in memoria: riavviare il collector ne fa perdere il contenuto.
 * 🔁 **Deduplicazione sicura in caso di riconnessione:** Un numero di sequenza opzionale per produttore, tracciato in una finestra di riordino limitata, così che un dispositivo che si riconnette e reinvia i suoi ultimi messaggi non confermati non gonfi mai i conteggi di ingestione. *(implementato)*
 * 🧭 **Input plausibile:** un timestamp in secondi invece che in millisecondi, o con più di 5 minuti di anticipo sull'orologio (`-max-future-skew`), e un `sourceId` troppo lungo o con caratteri invisibili vengono rifiutati (`400`); un produttore il cui contatore riparte dopo un riavvio viene riconosciuto (`producerResets` in `GET /stats`) invece di vedere i suoi nuovi campioni respinti come duplicati. *(implementato)*
 * 🩺 **Diagnosi reale dei fallimenti:** Ogni fallimento di flush viene classificato come un rifiuto genuino dei dati da parte del sink rispetto a un problema di trasporto - esposto in `GET /stats` per una reale visibilità operativa. *(implementato)*
 * 🧮 **Validazione dei campi finiti:** Un nome di campo vuoto o un valore numerico `NaN`/`Infinity`/`-Infinity` viene rifiutato (`400`) prima di raggiungere il buffer o un sink - la decodifica CAN passa per lo stesso `Sample.Validate()` dell'ingestione JSON. *(implementato)*
+* 📊 **Metriche Prometheus:** `GET /metrics` espone gli stessi contatori in tempo reale di ingestione e perdita di `GET /stats` (ingeriti, scartati, in quarantena, errori di invio di trasporto o di dati non validi, occupazione del buffer) nel vero formato di testo di Prometheus. *(implementato)*
+* 🧰 **Interruzioni, priorità e metriche protette (tutto opzionale):** `-spool <file>` conserva su disco i campioni di una lunga interruzione del datalake (limitata da `-spool-max-bytes`) e li reinvia per primi quando risponde di nuovo; `-priority tipo=livello,...` permette a un buffer pieno di scartare il campione meno importante per uno più importante (contato in `evicted`); `-datalake-permanent-statuses 401,403,404` scarta invece di riprovare all'infinito; `-metrics-token` fa richiedere un token a `GET /stats` e `GET /metrics`. Riportano la latenza dell'ultimo e del più lento invio e l'età del campione più vecchio nel buffer. Tutto è disattivato per impostazione predefinita. *(implementato)*
 
 ---
 
@@ -91,6 +93,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── dedup/            # Deduplicazione reale per sequenza per produttore (finestra di riordino)
 │   ├── collector/        # Orchestra ingestione+flush, riprova se il sink fallisce, dedup
 │   ├── sink/              # Dove vanno i lotti svuotati (ConsoleSink oggi), classificazione trasporto/dati non validi
+│   ├── spool/          # Coda opzionale su disco che conserva i campioni di una lunga interruzione della destinazione
 │   └── api/                # Handler JSON/HTTP semplici che avvolgono il collector
 ├── docs/
 │   └── API.md              # Riferimento reale degli endpoint HTTP (richieste, risposte, codici di stato)
