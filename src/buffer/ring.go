@@ -11,10 +11,18 @@
 // caller must react to (retry, shed load upstream, or - in
 // collector.go's case - simply not remove a drained batch from
 // accounting until the sink confirms it was written).
+//
+// Inside, the samples live in one circular queue per priority level (a single
+// queue when no priority is set), every sample stamped with an arrival number.
+// Taking the oldest sample looks at the front of each queue, and dropping the
+// least important one pops the front of the lowest queue, so a Push into a full
+// buffer costs a handful of steps however many samples are queued (it used to
+// scan every one of them under the lock and shift the slice).
 package buffer
 
 import (
 	"errors"
+	"sort"
 	"sync"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
@@ -22,10 +30,66 @@ import (
 
 var ErrFull = errors.New("buffer: full")
 
+type entry struct {
+	seq int64 // arrival number: smaller is older; samples put back at the front get numbers below every other
+	s   telemetry.Sample
+}
+
+// deque is a growable circular queue.
+type deque struct {
+	buf  []entry
+	head int
+	n    int
+}
+
+func (d *deque) grow() {
+	size := len(d.buf) * 2
+	if size == 0 {
+		size = 8
+	}
+	next := make([]entry, size)
+	for i := 0; i < d.n; i++ {
+		next[i] = d.buf[(d.head+i)%len(d.buf)]
+	}
+	d.buf, d.head = next, 0
+}
+
+func (d *deque) pushBack(e entry) {
+	if d.n == len(d.buf) {
+		d.grow()
+	}
+	d.buf[(d.head+d.n)%len(d.buf)] = e
+	d.n++
+}
+
+func (d *deque) pushFront(e entry) {
+	if d.n == len(d.buf) {
+		d.grow()
+	}
+	d.head = (d.head - 1 + len(d.buf)) % len(d.buf)
+	d.buf[d.head] = e
+	d.n++
+}
+
+func (d *deque) front() entry { return d.buf[d.head] }
+
+func (d *deque) popFront() entry {
+	e := d.buf[d.head]
+	d.buf[d.head] = entry{} // let the sample go
+	d.head = (d.head + 1) % len(d.buf)
+	d.n--
+	return e
+}
+
+// at is the i-th entry from the front.
+func (d *deque) at(i int) entry { return d.buf[(d.head+i)%len(d.buf)] }
+
 // Ring is a fixed-capacity FIFO queue of telemetry.Sample.
 type Ring struct {
 	mu       sync.Mutex
-	items    []telemetry.Sample
+	queues   map[int]*deque // priority level -> its samples, oldest first
+	levels   []int          // the levels that have a queue, ascending
+	total    int
 	capacity int
 	// priority, when set, lets a full buffer make room for a more important
 	// sample by dropping the least important one already queued (oldest
@@ -38,14 +102,70 @@ type Ring struct {
 	// batch is being written can never take the room that batch needs to come
 	// back to if the write fails.
 	inflight int
+	nextSeq  int64
+	frontSeq int64
+}
+
+// level is the queue a sample belongs to: its priority, or 0 for everybody when none is set.
+func (r *Ring) level(s telemetry.Sample) int {
+	if r.priority == nil {
+		return 0
+	}
+	return r.priority(s)
+}
+
+func (r *Ring) queueFor(level int) *deque {
+	q, ok := r.queues[level]
+	if !ok {
+		q = &deque{}
+		r.queues[level] = q
+		r.levels = append(r.levels, level)
+		sort.Ints(r.levels)
+	}
+	return q
+}
+
+// oldest is the queue whose front sample arrived first, or nil when nothing is queued.
+func (r *Ring) oldest() *deque {
+	var best *deque
+	for _, level := range r.levels {
+		q := r.queues[level]
+		if q.n == 0 {
+			continue
+		}
+		if best == nil || q.front().seq < best.front().seq {
+			best = q
+		}
+	}
+	return best
+}
+
+// ordered is every queued sample, oldest first.
+func (r *Ring) ordered() []entry {
+	out := make([]entry, 0, r.total)
+	for _, level := range r.levels {
+		q := r.queues[level]
+		for i := 0; i < q.n; i++ {
+			out = append(out, q.at(i))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].seq < out[j].seq })
+	return out
 }
 
 // SetPriority installs the drop policy: higher numbers matter more. Safe to
 // call before the ring is used; a nil function restores plain FIFO backpressure.
+// Samples already queued are sorted into the queues of the new policy.
 func (r *Ring) SetPriority(priority func(telemetry.Sample) int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	queued := r.ordered()
 	r.priority = priority
+	r.queues = map[int]*deque{}
+	r.levels = nil
+	for _, e := range queued {
+		r.queueFor(r.level(e.s)).pushBack(e)
+	}
 }
 
 // Evicted is how many queued samples were dropped to make room for a more
@@ -72,10 +192,7 @@ func New(capacity int) *Ring {
 	if capacity <= 0 {
 		capacity = 1
 	}
-	return &Ring{
-		items:    make([]telemetry.Sample, 0, capacity),
-		capacity: capacity,
-	}
+	return &Ring{queues: map[int]*deque{}, capacity: capacity}
 }
 
 // Push appends one sample, or returns ErrFull if the buffer is already
@@ -83,25 +200,50 @@ func New(capacity int) *Ring {
 func (r *Ring) Push(s telemetry.Sample) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.items)+r.inflight >= r.capacity {
-		if r.priority == nil || len(r.items) == 0 {
+	level := r.level(s)
+	if r.total+r.inflight >= r.capacity {
+		if r.priority == nil || r.total == 0 {
 			return ErrFull
 		}
-		// Find the least important queued sample (the oldest among equals).
-		lowest := 0
-		for i := 1; i < len(r.items); i++ {
-			if r.priority(r.items[i]) < r.priority(r.items[lowest]) {
-				lowest = i
+		// The least important queued sample is the front of the lowest queue that has one (the oldest among equals).
+		var lowest *deque
+		lowestLevel := 0
+		for _, l := range r.levels {
+			if q := r.queues[l]; q.n > 0 {
+				lowest, lowestLevel = q, l
+				break
 			}
 		}
-		if r.priority(s) <= r.priority(r.items[lowest]) {
+		if lowest == nil || level <= lowestLevel {
 			return ErrFull // the newcomer is no more important than anything queued
 		}
-		r.items = append(r.items[:lowest], r.items[lowest+1:]...)
+		lowest.popFront()
+		r.total--
 		r.evicted++
 	}
-	r.items = append(r.items, s)
+	r.queueFor(level).pushBack(entry{seq: r.nextSeq, s: s})
+	r.nextSeq++
+	r.total++
 	return nil
+}
+
+func (r *Ring) take(max int) []telemetry.Sample {
+	if max > r.total {
+		max = r.total
+	}
+	if max < 0 {
+		max = 0
+	}
+	out := make([]telemetry.Sample, 0, max)
+	for len(out) < max {
+		q := r.oldest()
+		if q == nil {
+			break
+		}
+		out = append(out, q.popFront().s)
+	}
+	r.total -= len(out)
+	return out
 }
 
 // Drain removes and returns up to `max` samples from the front of the
@@ -110,13 +252,7 @@ func (r *Ring) Push(s telemetry.Sample) error {
 func (r *Ring) Drain(max int) []telemetry.Sample {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if max > len(r.items) {
-		max = len(r.items)
-	}
-	out := make([]telemetry.Sample, max)
-	copy(out, r.items[:max])
-	r.items = r.items[max:]
-	return out
+	return r.take(max)
 }
 
 // Requeue puts samples back at the FRONT of the buffer - used when a
@@ -133,7 +269,7 @@ func (r *Ring) Requeue(samples []telemetry.Sample) (dropped int) {
 }
 
 func (r *Ring) requeueLocked(samples []telemetry.Sample) (dropped int) {
-	room := r.capacity - len(r.items) - r.inflight
+	room := r.capacity - r.total - r.inflight
 	if room <= 0 {
 		return len(samples)
 	}
@@ -142,7 +278,12 @@ func (r *Ring) requeueLocked(samples []telemetry.Sample) (dropped int) {
 		dropped = len(toKeep) - room
 		toKeep = toKeep[:room]
 	}
-	r.items = append(append(make([]telemetry.Sample, 0, len(toKeep)+len(r.items)), toKeep...), r.items...)
+	// last first, each one in front of the others, so the first of the batch ends up the oldest
+	for i := len(toKeep) - 1; i >= 0; i-- {
+		r.frontSeq--
+		r.queueFor(r.level(toKeep[i])).pushFront(entry{seq: r.frontSeq, s: toKeep[i]})
+	}
+	r.total += len(toKeep)
 	return dropped
 }
 
@@ -152,13 +293,8 @@ func (r *Ring) requeueLocked(samples []telemetry.Sample) (dropped int) {
 func (r *Ring) DrainReserved(max int) []telemetry.Sample {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if max > len(r.items) {
-		max = len(r.items)
-	}
-	out := make([]telemetry.Sample, max)
-	copy(out, r.items[:max])
-	r.items = r.items[max:]
-	r.inflight += max
+	out := r.take(max)
+	r.inflight += len(out)
 	return out
 }
 
@@ -189,16 +325,17 @@ func (r *Ring) InFlight() int {
 func (r *Ring) OldestTimestamp() (int64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.items) == 0 {
+	q := r.oldest()
+	if q == nil {
 		return 0, false
 	}
-	return r.items[0].Timestamp, true
+	return q.front().s.Timestamp, true
 }
 
 func (r *Ring) Len() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return len(r.items)
+	return r.total
 }
 
 func (r *Ring) Cap() int {

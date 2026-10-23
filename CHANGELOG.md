@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The buffer is a real ring**: samples live in one circular queue per priority level, stamped with their arrival, so a push into a full buffer that drops the least important sample costs a few steps however many are queued (it used to scan all of them and shift the slice under the lock), and a drain no longer keeps the old array alive. A test checks it against the previous implementation over random sequences of push, drain, reserved drain, settle and requeue (identical answers, order, counters and oldest timestamp), and another that a full buffer does not scan what is queued.
 - Each flush goes to the datalake in one batch request (`POST /ingest/batch`, up to 1000 samples, one transaction) instead of one request per sample; a datalake without that route is detected and the old per-sample delivery is used, and a rejected batch is repeated sample by sample so only the invalid sample is discarded. `-datalake-batch=false` turns it off.
 - `-spool <file>` keeps the samples of a long datalake outage on disk (bounded by `-spool-max-bytes`), keeps accepting new ones meanwhile and replays them first when the datalake is back; it is off by default.
 - `-priority kind=level,...` lets a full buffer drop the least important queued sample for a more important one, counted in `evicted`; it is off by default.
