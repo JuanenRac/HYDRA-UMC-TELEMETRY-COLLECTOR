@@ -109,3 +109,26 @@ func TestMetricsTokenNeedsTheSameMinimumLengthAsTheIngestToken(t *testing.T) {
 		t.Fatal("metricsTokenProblem does not follow the minimum length")
 	}
 }
+
+func TestMqttProblemRefusesPlaintextCredentialsToAnotherMachine(t *testing.T) {
+	cases := []struct {
+		url   string
+		plain bool
+		bad   bool
+	}{
+		{"", false, false},
+		{"tcp://127.0.0.1:1883", false, false},
+		{"tcp://localhost:1883", false, false},
+		{"tcp://[::1]:1883", false, false},
+		{"tls://broker.example:8883", false, false},
+		{"tcp://192.168.0.180:1883", false, true},
+		{"tcp://192.168.0.180:1883", true, false},
+		{"http://127.0.0.1", false, true},
+		{"127.0.0.1:1883", false, true},
+	}
+	for _, c := range cases {
+		if got := mqttProblem(c.url, "user", c.plain) != ""; got != c.bad {
+			t.Errorf("mqttProblem(%q, plain=%v) refused = %v, want %v", c.url, c.plain, got, c.bad)
+		}
+	}
+}

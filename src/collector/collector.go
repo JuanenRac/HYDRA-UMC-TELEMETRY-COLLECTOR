@@ -189,6 +189,16 @@ func (c *Collector) IngestWS(raw []byte) error {
 	return c.ingest(s)
 }
 
+// IngestSample buffers a sample that a producer inside this process already built (the MQTT adapter). It is checked like any
+// other: a sample that does not pass Validate is refused and counted as an ingest error.
+func (c *Collector) IngestSample(s telemetry.Sample) error {
+	if err := s.Validate(); err != nil {
+		c.ingestErrors.Add(1)
+		return err
+	}
+	return c.ingest(s)
+}
+
 func (c *Collector) ingest(s telemetry.Sample) error {
 	// Sequence == 0 means "not provided" (see telemetry.Sample) - a
 	// producer that doesn't send sequence numbers is never deduplicated,

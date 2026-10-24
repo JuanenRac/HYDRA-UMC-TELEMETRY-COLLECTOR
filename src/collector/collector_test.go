@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
@@ -662,5 +663,20 @@ func TestCollector_FlushOnEmptyBufferIsANoOp(t *testing.T) {
 	defer s.mu.Unlock()
 	if len(s.written) != 0 {
 		t.Fatalf("sink was written to on an empty flush: %+v", s.written)
+	}
+}
+
+func TestCollector_IngestSampleChecksTheSampleLikeAnyOtherInput(t *testing.T) {
+	c := New(10, &memorySink{})
+	good := telemetry.Sample{SourceID: "bridge-cnc", Kind: "bridge_state", Timestamp: time.Now().UnixMilli(), Fields: map[string]float64{"x": 1}}
+	if err := c.IngestSample(good); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.IngestSample(telemetry.Sample{Kind: "bridge_state", Timestamp: time.Now().UnixMilli(), Fields: map[string]float64{"x": 1}}); err == nil {
+		t.Fatal("a sample with no source must be refused")
+	}
+	st := c.Stats()
+	if st.Ingested != 1 || st.IngestErrors != 1 || c.BufferLen() != 1 {
+		t.Fatalf("stats = %+v, buffer = %d", st, c.BufferLen())
 	}
 }

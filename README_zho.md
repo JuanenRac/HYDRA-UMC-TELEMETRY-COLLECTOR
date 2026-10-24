@@ -142,6 +142,8 @@ run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 
 默认情况下，collector 只在回环地址上监听，其摄取路由对本地调用方开放。若要在网络地址上监听，必须为它提供 Bearer 令牌（`-token`，或 `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`；至少 16 个字符）：此时 `POST /ingest/can` 和 `POST /ingest/ws` 要求 `Authorization: Bearer <token>`（`/stats` 和 `/metrics` 保持开放，本地采集器无需任何密钥）。非回环的 `-addr` 若没有令牌，启动时会被拒绝，除非传入 `-allow-anonymous`。请求体上限为 1 MiB（超出返回 `413`），HTTP 服务器还会应用读取、写入和空闲超时。
 
+**通过 MQTT 读取各个网桥。** 使用 `-mqtt-url tcp://127.0.0.1:1883`(或 `tls://broker:8883`,私有证书颁发机构用 `-mqtt-ca-file`)后,采集器还会订阅 `hydra/bridges/+/state` 和 `hydra/bridges/+/availability`(`-mqtt-topics`),并把每条消息变成一个样本:`bridge_state` 包含状态中的每个数值和标志(嵌套一层)以及 `machine_state.<值>` 标志,时间戳取网桥的 `observed_at`;`bridge_availability` 的 `online` 为 1 或 0。比 `-mqtt-max-age`(默认 2 分钟)更旧的保留状态是代理的记忆而不是读数,会被跳过。用户名来自 `-mqtt-username` 或 `HYDRA_UMC_TELEMETRY_MQTT_USER`,密码来自 `-mqtt-password-file` 或 `HYDRA_UMC_TELEMETRY_MQTT_PASSWORD`;通过明文连接向另一台机器发送凭据会被拒绝,除非加上 `-mqtt-allow-plaintext`。该输入默认关闭,`GET /stats` 在 `mqtt` 下报告其连接和计数。尚未用生态系统的真实代理试过。
+
 ```bash
 # 摄取一个 WebSocket 风格的遥测样本
 curl -X POST localhost:8092/ingest/ws \
