@@ -103,11 +103,13 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── version.go        # const Version = "X.Y.Z"
 │   ├── main.go           # エントリポイント：すべてを接続し、HTTP API を起動
 │   ├── guard.go        # 起動ガード：Bearer トークンがない限りループバックのみ
+│   ├── guard_test.go   # ループバック限定の起動ガードのテスト
+│   ├── mqttin/         # ブリッジが MQTT で伝える内容 (状態、可用性) をテレメトリのサンプルに変換
 │   ├── telemetry/        # Sample 型 + CAN/WebSocket パーサー(正規化)
 │   ├── buffer/           # 背圧を報告する有界 FIFO(Ring)
 │   ├── dedup/            # 実際のプロデューサーごとのシーケンス重複排除(並べ替えウィンドウ)
 │   ├── collector/        # 取り込み+フラッシュを調整、シンク失敗時に再試行、重複排除
-│   ├── sink/              # フラッシュされたバッチの行き先(現在は ConsoleSink)、トランスポート/無効データの分類
+│   ├── sink/              # 送出したバッチの送り先 (HTTP 経由のデータレイクまたはコンソール)、転送エラーと不正データの分類
 │   ├── spool/          # 送信先の長い障害中のサンプルを保持する任意のディスク上キュー
 │   └── api/                # collector を包む単純な JSON/HTTP ハンドラー
 ├── docs/
@@ -117,7 +119,10 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── hydra-umc-telemetry-collector.service # ローカルCM5テレメトリ取り込みAPIのsystemdユニット
 ├── tools/
 │   ├── build_test.py     # バージョンを増やさないビルドチェック
-│   └── ci_validate.py    # CI が使用するマニフェスト/CHANGELOG/ドキュメント検証
+│   ├── ci_validate.py    # CI が使用するマニフェスト/CHANGELOG/ドキュメント検証
+│   ├── _doc_policy.py    # ファミリー共通のドキュメント規則 (HYDRA-UMC-SDK のコピーで、同期を維持)
+│   ├── _readme_parity.py # 8つの README が同じ構造であることの検査 (HYDRA-UMC-SDK のコピーで、同期を維持)
+│   └── hydra_project_tool.py # すべてのリポジトリで共通のコマンド: validate、test、ci、version、status、bump
 ├── build/                # コンパイル済みバイナリ（gitignore 対象）
 ├── bump_version.py        # オドメーター式バージョンインクリメント（明示的な `bump` コマンドのみが実行）
 ├── bump_manifest_version.py # hydra-umc.project.json のバージョンをネイティブ版と同期(--sync)

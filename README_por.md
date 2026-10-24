@@ -101,11 +101,13 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── version.go      # const Version = "X.Y.Z"
 │   ├── main.go         # Ponto de entrada: liga tudo e arranca a API HTTP
 │   ├── guard.go        # Guarda de arranque: só loopback, a menos que haja um token Bearer
+│   ├── guard_test.go   # Testes da guarda de arranque só em loopback
+│   ├── mqttin/         # Converte o que os bridges dizem por MQTT (estado, disponibilidade) em amostras de telemetria
 │   ├── telemetry/      # Tipo Sample + analisadores CAN/WebSocket (normalização)
 │   ├── buffer/         # FIFO limitado que reporta contrapressão (Ring)
 │   ├── dedup/           # Deduplicação real de sequências por produtor (janela de reordenação)
 │   ├── collector/      # Orquestra ingestão e descarga, repete em caso de falha do destino, deduplicação
-│   ├── sink/           # Para onde vão os lotes descarregados (ConsoleSink hoje), classificação transporte/dados inválidos
+│   ├── sink/           # Para onde vão os lotes enviados (o data lake por HTTP ou a consola), classificação de falhas de transporte e de dados inválidos
 │   ├── spool/          # Fila opcional em disco que guarda as amostras de uma falha longa do destino
 │   └── api/             # Handlers JSON/HTTP simples que envolvem o collector
 ├── docs/
@@ -115,7 +117,10 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── hydra-umc-telemetry-collector.service # Unidade systemd da API local de ingestão de telemetria do CM5
 ├── tools/
 │   ├── build_test.py    # Verificação de compilação sem subida de versão
-│   └── ci_validate.py   # Validação de manifesto/CHANGELOG/documentação usada pelo CI
+│   ├── ci_validate.py   # Validação de manifesto/CHANGELOG/documentação usada pelo CI
+│   ├── _doc_policy.py   # Regras de documentação partilhadas pela família (cópia da de HYDRA-UMC-SDK, mantida em sincronia)
+│   ├── _readme_parity.py # Verificação de que os oito README partilham a mesma estrutura (cópia da de HYDRA-UMC-SDK, mantida em sincronia)
+│   └── hydra_project_tool.py # Os mesmos comandos em todos os repositórios: validate, test, ci, version, status, bump
 ├── build/               # Binários compilados (ignorados pelo git)
 ├── bump_version.py      # Subida de versão ao estilo conta-quilómetros (executada só pelo comando `bump` explícito)
 ├── bump_manifest_version.py # Sincroniza a versão do hydra-umc.project.json com a nativa (--sync)
