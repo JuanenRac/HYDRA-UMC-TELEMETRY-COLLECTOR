@@ -24,7 +24,7 @@
 
 | | |
 |---|---|
-| バージョン | `0.1.7` |
+| バージョン | `0.1.8` |
 | 成熟度 | 機能する |
 | 技術 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | 対象 | HYDRA-UMC セルの Raspberry Pi CM5 |
