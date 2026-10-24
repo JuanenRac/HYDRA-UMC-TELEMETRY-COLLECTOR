@@ -24,7 +24,7 @@
 
 | | |
 |---|---|
-| Versão | `0.1.7` |
+| Versão | `0.1.8` |
 | Maturidade | Funcional |
 | Tecnologia | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | Destino | O Raspberry Pi CM5 de uma célula HYDRA-UMC |

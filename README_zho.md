@@ -24,7 +24,7 @@
 
 | | |
 |---|---|
-| 版本 | `0.1.7` |
+| 版本 | `0.1.8` |
 | 成熟度 | 可用 |
 | 技术栈 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | 目标 | HYDRA-UMC 工作单元的 Raspberry Pi CM5 |
