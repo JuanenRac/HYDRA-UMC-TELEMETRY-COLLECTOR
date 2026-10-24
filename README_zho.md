@@ -102,11 +102,13 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── version.go        # const Version = "X.Y.Z"
 │   ├── main.go           # 入口点：连接一切，启动 HTTP API
 │   ├── guard.go        # 启动守卫：除非设置了 Bearer 令牌，否则仅限回环
+│   ├── guard_test.go   # 仅限本机回环的启动保护测试
+│   ├── mqttin/         # 把各 bridge 通过 MQTT 发出的内容 (状态、可用性) 转为遥测样本
 │   ├── telemetry/        # Sample 类型 + CAN/WebSocket 解析器（归一化）
 │   ├── buffer/           # 带背压报告的有界 FIFO（Ring）
 │   ├── dedup/            # 真实的按生产者序列号去重（重排序窗口）
 │   ├── collector/        # 编排摄取+刷新，sink 失败时重试，去重
-│   ├── sink/              # 已刷新批次的去向（目前是 ConsoleSink），传输/无效数据分类
+│   ├── sink/              # 已刷新批次的去向 (经 HTTP 的数据湖或控制台),传输错误与无效数据的分类
 │   ├── spool/          # 可选的磁盘队列，保存目标长时间故障期间的样本
 │   └── api/                # 封装 collector 的简单 JSON/HTTP 处理器
 ├── docs/
@@ -116,7 +118,10 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── hydra-umc-telemetry-collector.service # 本地 CM5 遥测数据摄取 API 的 systemd 单元
 ├── tools/
 │   ├── build_test.py     # 不递增版本号的构建检查
-│   └── ci_validate.py    # CI 使用的清单/CHANGELOG/文档校验
+│   ├── ci_validate.py    # CI 使用的清单/CHANGELOG/文档校验
+│   ├── _doc_policy.py    # 家族共享的文档规则 (HYDRA-UMC-SDK 的副本,保持同步)
+│   ├── _readme_parity.py # 检查八个 README 结构一致 (HYDRA-UMC-SDK 的副本,保持同步)
+│   └── hydra_project_tool.py # 每个仓库相同的命令: validate、test、ci、version、status、bump
 ├── build/                # 编译后的二进制文件（已被 gitignore）
 ├── bump_version.py        # 里程表式版本递增（仅由显式 `bump` 命令运行）
 ├── bump_manifest_version.py # 将 hydra-umc.project.json 的版本与原生版本同步(--sync)

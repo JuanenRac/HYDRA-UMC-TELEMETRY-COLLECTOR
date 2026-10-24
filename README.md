@@ -101,11 +101,13 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── version.go      # const Version = "X.Y.Z"
 │   ├── main.go         # Entry point: wires everything, starts the HTTP API
 │   ├── guard.go        # Startup guard: loopback-only unless a bearer token is set
+│   ├── guard_test.go   # Tests of the loopback-only start-up guard
+│   ├── mqttin/         # Turns what the bridges say on MQTT (state, availability) into telemetry samples
 │   ├── telemetry/      # Sample type + CAN/WebSocket parsers (normalization)
 │   ├── buffer/         # Bounded, backpressure-reporting FIFO (Ring)
 │   ├── dedup/           # Real per-producer sequence deduplication (reorder window)
 │   ├── collector/      # Orchestrates ingest+flush, retries on sink failure, dedup
-│   ├── sink/           # Where flushed batches go (ConsoleSink today), transport/invalid-data classification
+│   ├── sink/           # Where flushed batches go (the data lake over HTTP, or the console), transport/invalid-data classification
 │   ├── spool/          # Optional on-disk queue that holds the samples of a long sink outage
 │   └── api/             # Plain JSON/HTTP handlers wrapping the collector
 ├── docs/
@@ -115,7 +117,10 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   └── hydra-umc-telemetry-collector.service # Local CM5 telemetry-ingestion API systemd unit
 ├── tools/
 │   ├── build_test.py    # Non-versioning build/compile check
-│   └── ci_validate.py   # Manifest/CHANGELOG/docs validation used by CI
+│   ├── ci_validate.py   # Manifest/CHANGELOG/docs validation used by CI
+│   ├── _doc_policy.py   # Documentation rules shared by the family (a copy of HYDRA-UMC-SDK's, kept in sync)
+│   ├── _readme_parity.py # Check that the eight READMEs share one structure (a copy of HYDRA-UMC-SDK's, kept in sync)
+│   └── hydra_project_tool.py # The same commands in every repository: validate, test, ci, version, status, bump
 ├── build/               # Compiled binaries (gitignored)
 ├── bump_version.py      # Odometer-style version bump (run only by the explicit `bump` command)
 ├── bump_manifest_version.py # Syncs hydra-umc.project.json's version to the native one (--sync)
