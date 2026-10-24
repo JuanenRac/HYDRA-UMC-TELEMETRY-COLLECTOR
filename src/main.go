@@ -25,12 +25,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/api"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/mqttin"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/spool"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
@@ -58,6 +60,13 @@ func main() {
 	priority := flag.String("priority", "", "kind=level pairs (for example fault=9,motor_temp=5) that let a full buffer drop the least important queued sample for a more important one; empty keeps plain backpressure")
 	priorityDefault := flag.Int("priority-default", 0, "level of the kinds that -priority does not list")
 	allowAnonymous := flag.Bool("allow-anonymous", false, "allow a non-loopback -addr with no token (the ingest routes are then open to the whole network)")
+	mqttURL := flag.String("mqtt-url", "", "broker to read the state of the bridges from (tcp://127.0.0.1:1883 or tls://host:8883); empty leaves the MQTT input off")
+	mqttTopics := flag.String("mqtt-topics", mqttin.StateTopic+","+mqttin.AvailabilityTopic, "comma-separated topic filters the MQTT input subscribes to")
+	mqttUser := flag.String("mqtt-username", os.Getenv(mqttUserEnv), "MQTT user name (default: $"+mqttUserEnv+")")
+	mqttPasswordFile := flag.String("mqtt-password-file", "", "file holding the MQTT password (default: $"+mqttPasswordEnv+")")
+	mqttCA := flag.String("mqtt-ca-file", "", "PEM file of the authority that signed the broker certificate (tls:// only)")
+	mqttPlain := flag.Bool("mqtt-allow-plaintext", false, "allow credentials over a plain connection to a broker that is not on this machine")
+	mqttMaxAge := flag.Duration("mqtt-max-age", mqttin.DefaultMaxAge, "oldest retained state that still counts as a reading")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
 
@@ -74,6 +83,10 @@ func main() {
 		priorityTable, problem = parsePriority(*priority)
 	}
 	if problem != "" {
+		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
+		os.Exit(2)
+	}
+	if problem := mqttProblem(*mqttURL, *mqttUser, *mqttPlain); problem != "" {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
 		os.Exit(2)
 	}
@@ -115,12 +128,47 @@ func main() {
 	if priorityTable != nil {
 		c.SetPriority(buffer.PriorityByKind(priorityTable, *priorityDefault))
 	}
-	server := api.NewWithOptions(c, api.Options{Token: *token, MetricsToken: *metricsToken})
+	var mqttStats func() map[string]any
+	server := api.NewWithOptions(c, api.Options{Token: *token, MetricsToken: *metricsToken, ExtraStats: func() map[string]any {
+		if mqttStats == nil {
+			return nil
+		}
+		return mqttStats()
+	}})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go c.Run(ctx, *flushInterval, *batchSize)
+
+	if *mqttURL != "" {
+		password := os.Getenv(mqttPasswordEnv)
+		if *mqttPasswordFile != "" {
+			raw, err := os.ReadFile(*mqttPasswordFile)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "[telemetry-collector] cannot read the MQTT password file: "+err.Error())
+				os.Exit(2)
+			}
+			password = strings.TrimSpace(string(raw))
+		}
+		adapter := &mqttin.Adapter{Submit: c.IngestSample, MaxAge: *mqttMaxAge}
+		var topics []string
+		for _, t := range strings.Split(*mqttTopics, ",") {
+			if t = strings.TrimSpace(t); t != "" {
+				topics = append(topics, t)
+			}
+		}
+		client, err := mqttin.New(mqttin.Options{URL: *mqttURL, Username: *mqttUser, Password: password, CAFile: *mqttCA, Topics: topics}, adapter.Handle)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] "+err.Error())
+			os.Exit(2)
+		}
+		go client.Run(ctx)
+		mqttStats = func() map[string]any {
+			return map[string]any{"mqtt": map[string]any{"connection": client.Status(), "samples": adapter.Counters()}}
+		}
+		fmt.Printf("[telemetry-collector] reading the state of the bridges from %s (%s)\n", *mqttURL, strings.Join(topics, ", "))
+	}
 
 	fmt.Printf("[telemetry-collector] HTTP API listening on %s (buffer=%d, flush every %s, batch=%d)\n",
 		*addr, *bufferCap, *flushInterval, *batchSize)

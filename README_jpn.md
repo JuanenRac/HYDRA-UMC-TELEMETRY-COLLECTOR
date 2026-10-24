@@ -146,6 +146,8 @@ run.bat -addr 127.0.0.1:8092 -datalake-url http://localhost:8095
 
 デフォルトでは、コレクターはループバックのみで待ち受け、取り込みルートはローカルの呼び出し元に開かれています。ネットワークアドレスで待ち受けるには、Bearer トークン（`-token`、または `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`。16文字以上）を指定します。すると `POST /ingest/can` と `POST /ingest/ws` は `Authorization: Bearer <token>` を要求します（`/stats` と `/metrics` は、ローカルのスクレイパーが秘密情報を必要としないよう開いたままです）。ループバック以外の `-addr` でトークンがない場合は、`-allow-anonymous` を渡さない限り起動時に拒否されます。リクエスト本文は 1 MiB に制限され（超えると `413`）、HTTP サーバーは読み取り・書き込み・アイドルのタイムアウトを適用します。
 
+**MQTT でブリッジを読む。** `-mqtt-url tcp://127.0.0.1:1883`(または `tls://broker:8883`、私設の認証局には `-mqtt-ca-file`)を付けると、コレクターは `hydra/bridges/+/state` と `hydra/bridges/+/availability`(`-mqtt-topics`)も購読し、各メッセージをサンプルに変換します。`bridge_state` は状態のすべての数値とフラグ(入れ子は 1 段)と `machine_state.<値>` フラグを持ち、ブリッジの `observed_at` を時刻とします。`bridge_availability` は `online` が 1 または 0 です。`-mqtt-max-age`(既定 2 分)より古い保持状態はブローカーの記憶であって測定値ではないため、読み飛ばします。ユーザー名は `-mqtt-username` または `HYDRA_UMC_TELEMETRY_MQTT_USER`、パスワードは `-mqtt-password-file` または `HYDRA_UMC_TELEMETRY_MQTT_PASSWORD` から取ります。別のマシンへの平文接続で認証情報を送ることは `-mqtt-allow-plaintext` がない限り拒否されます。この入力は既定でオフで、`GET /stats` の `mqtt` に接続状態とカウントが出ます。エコシステムの実際のブローカーではまだ試していません。
+
 ```bash
 # WebSocket 形式のテレメトリサンプルを取り込む
 curl -X POST localhost:8092/ingest/ws \

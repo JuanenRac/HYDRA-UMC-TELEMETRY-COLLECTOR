@@ -140,3 +140,7 @@ A producer that **restarts** begins its counter again, far behind everything it 
 ## Errors
 
 Startup settings are checked: `-buffer`, `-batch-size` and `-flush-interval` must be positive (a zero or negative one used to crash the flush loop or never drain the buffer). Any other path/method returns Go's default `405 Method Not Allowed` (with an `Allow` header) for a known path with the wrong verb, or `404 page not found` (stdlib `net/http` default) for an unknown path.
+
+## MQTT input
+
+Off unless `-mqtt-url` is given (`tcp://host:1883` or `tls://host:8883`). Flags: `-mqtt-topics` (default `hydra/bridges/+/state,hydra/bridges/+/availability`), `-mqtt-username` / `HYDRA_UMC_TELEMETRY_MQTT_USER`, `-mqtt-password-file` / `HYDRA_UMC_TELEMETRY_MQTT_PASSWORD`, `-mqtt-ca-file`, `-mqtt-allow-plaintext`, `-mqtt-max-age`. Samples: `bridge_state` (source `bridge-<name>`; fields are the numbers and flags of the state, nested one level as `name.sub`, plus `machine_state.<value>` = 1) and `bridge_availability` (`online` = 1 or 0). `GET /stats` adds `mqtt.connection` (`connected`, `received`, `reconnects`, `lastError`) and `mqtt.samples` (`accepted`, `ignored`, `rejected`, `submitFailures`).

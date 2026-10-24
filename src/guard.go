@@ -11,6 +11,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -115,6 +116,39 @@ func flagProblem(bufferCap, batchSize int, flushInterval time.Duration) string {
 	}
 	if flushInterval <= 0 {
 		return "-flush-interval must be a positive duration"
+	}
+	return ""
+}
+
+// mqttPasswordEnv and mqttUserEnv supply the credentials of the optional MQTT input.
+const (
+	mqttUserEnv     = "HYDRA_UMC_TELEMETRY_MQTT_USER"
+	mqttPasswordEnv = "HYDRA_UMC_TELEMETRY_MQTT_PASSWORD"
+)
+
+// mqttProblem returns why the MQTT input cannot be started as asked, or "" when it can. Credentials sent over a plain connection
+// to a machine other than this one can be read by anyone on the way: that needs tls:// or the explicit -mqtt-allow-plaintext.
+func mqttProblem(rawURL, username string, allowPlaintext bool) string {
+	if rawURL == "" {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return "-mqtt-url must look like tcp://127.0.0.1:1883 or tls://broker:8883"
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "tls", "ssl", "mqtts":
+		return ""
+	case "tcp", "mqtt":
+	default:
+		return "-mqtt-url must start with tcp:// or tls://"
+	}
+	host := u.Hostname()
+	if ip := net.ParseIP(host); host == "localhost" || (ip != nil && ip.IsLoopback()) {
+		return ""
+	}
+	if !allowPlaintext {
+		return "refusing to talk MQTT in the clear to " + host + ": use tls:// (with -mqtt-ca-file for a private authority) or pass -mqtt-allow-plaintext on a network you trust"
 	}
 	return ""
 }

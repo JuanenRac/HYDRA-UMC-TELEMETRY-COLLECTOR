@@ -42,6 +42,8 @@ type Options struct {
 	// /stats and /metrics too (it may differ from Token, so a scraper needs no write
 	// access). Empty keeps the two routes open.
 	MetricsToken string
+	// ExtraStats, when set, adds its keys to the answer of /stats (the state of the optional inputs of the process).
+	ExtraStats func() map[string]any
 }
 
 type Server struct {
@@ -206,7 +208,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stats := s.collector.Stats()
-	writeJSON(w, http.StatusOK, map[string]any{
+	answer := map[string]any{
 		"evicted":           stats.Evicted,
 		"lastFlushMs":       stats.LastFlushMs,
 		"maxFlushMs":        stats.MaxFlushMs,
@@ -228,7 +230,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"inFlight":          stats.InFlight,
 		"bufferLen":         s.collector.BufferLen(),
 		"bufferCap":         s.collector.BufferCap(),
-	})
+	}
+	if s.opts.ExtraStats != nil {
+		for key, value := range s.opts.ExtraStats() {
+			if _, taken := answer[key]; !taken {
+				answer[key] = value
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // promMetric is one line of this handler's own real, static metric
