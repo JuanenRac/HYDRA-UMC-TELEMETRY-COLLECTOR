@@ -30,6 +30,19 @@
 | Ziel | Der Raspberry Pi CM5 einer HYDRA-UMC-Zelle |
 | Auf echter Hardware | Noch nicht: für diese Version ist kein Lauf auf echter Hardware vermerkt |
 
+## 🚦 Projektstatus
+
+Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heute ist. Sie beruht auf dem, was das Repository zeigen kann (Tests, Builds, Läufe), nicht auf dem, was geplant ist.
+
+🟢 Fertig und überprüft · 🟡 Funktioniert, mit bekannten Grenzen · 🟠 Teilweise fertig oder noch nicht überprüft · 🔴 Nicht gemacht oder funktioniert nicht
+
+| Bereich | Stand | Was das hier bedeutet |
+|---|---|---|
+| Software | 🟡 | Funktioniert für seinen Hauptzweck; die Ehrlichkeitsprüfung oben nennt, was noch fehlt |
+| Tests | 🟠 | Für dieses Repository ist noch keine Testanzahl vermerkt |
+| Echte Hardware | 🔴 | Noch nicht: für diese Version ist kein Lauf auf echter Hardware vermerkt |
+| Dokumentation | 🟢 | README in acht Sprachen, bei jeder Änderung gegen das Manifest geprüft |
+
 ## 1. 🛠️ TECHNISCHER ÜBERBLICK
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** ist das Ingest-Gateway, das per HTTP an es gesendete Telemetrie entgegennimmt und in den Datalake schreibt. Es wandelt CAN-Frames und WebSocket-JSON-Nachrichten, die es erhält, in normalisierte Messwerte um; einen CAN-Bus hört es selbst noch nicht ab (geplant).
