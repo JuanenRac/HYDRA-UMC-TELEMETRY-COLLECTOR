@@ -1,3 +1,9 @@
+<!-- =============================================================================
+HYDRA-UMC-TELEMETRY-COLLECTOR - Ingestion node for CAN, WebSocket and MQTT telemetry
+Copyright (C) JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
+GPL-3.0-or-later - see LICENSE
+============================================================================= -->
+
 <p align="center">
   <img src="images/HYDRA_UMC_BANNER.svg" alt="HYDRA-UMC-TELEMETRY-COLLECTOR banner" width="100%">
 </p>
@@ -9,16 +15,19 @@
 ### 🚀 Nœud d'ingestion à haut débit pour les journaux CAN et WebSocket
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Licence-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Langage-Go-orange.svg" alt="Go">
-  <img src="https://img.shields.io/badge/Protocole-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
+  <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
+  <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
+  <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
+  <img src="https://img.shields.io/badge/Tests-126%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Version-0.1.8-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
-
-**Vérification d'honnêteté - ce qui fonctionne réellement aujourd'hui :** le vrai pipeline d'ingestion - `telemetry` analysant les trames CAN et le JSON WebSocket en un `Sample` normalisé, l'anneau borné avec signalement de contre-pression de `buffer`, l'orchestration ingestion+vidage de `collector` (une écriture échouée vers le sink remet tout le lot en file au lieu de le perdre), le suivi de séquence par producteur résistant à la reconnexion de `dedup`, et le vrai `DatalakeSink` de `sink` (testé contre un vrai `net/http/httptest.Server` implémentant le propre `POST /ingest` de DATALAKE) ou son repli `ConsoleSink` - sont tous réels et testés (51 tests, `go test ./...`). Deux vraies lacunes à connaître avant toute intégration : ce collecteur n'ouvre pas lui-même une connexion réelle à un bus FDCAN physique ni n'accepte de connexions WebSocket en direct d'un robot - l'ingestion se fait via sa propre API HTTP simple (`POST /ingest/can`, `POST /ingest/ws`), donc quelque chose d'autre doit encore lire le vrai bus/socket et relayer les trames ici. Et le format de trame CAN propre à `telemetry/can.go` (octet de code de signal + valeur float32) est une convention v0 propre et auto-déclarée de ce projet, pas encore les véritables tables d'ID CAN documentées par l'écosystème dans le firmware de HYDRA-UMC/URTC - délibérément non devinées. La sortie est uniquement du JSON réel ; le « JSON/Protobuf » du README lui-même et l'ingestion gRPC restent planifiés, non implémentés nulle part dans ce code. Voir `CHANGELOG.md` pour ce qui a été livré exactement jusqu'à présent.
 
 ---
 
 > **État de la sûreté et de la cybersécurité :** cet écosystème n'est pas un système de sécurité certifié. Il n'existe pas encore de chaîne d'E-STOP matérielle, ni de limites ou de verrouillages imposés par le firmware, ni de commande de mouvement vérifiée ; les images de firmware sont contrôlées par CRC32 et un HMAC-SHA256 à clé partagée, pas par une signature asymétrique ; TLS et TLS mutuel sont optionnels et désactivés par défaut ; aucune carte propre n'a encore été assemblée ni testée. Lisez la [base de sécurité](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md) et le [modèle de menaces](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md) avant de vous fier à une affirmation d'ici pour la sécurité d'une personne.
+
+---
 
 ## 📋 En un coup d'œil
 
@@ -26,9 +35,12 @@
 |---|---|
 | Version | `0.1.8` |
 | Maturité | Fonctionnel |
+| Tests | 126 (`go test ./...`) |
 | Technologie | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | Cible | Le Raspberry Pi CM5 d'une cellule HYDRA-UMC |
 | Sur matériel réel | Pas encore : aucune exécution sur du matériel réel n'est consignée pour cette version |
+
+**Aller à :** [Présentation](#-présentation) · [Architecture](#-architecture) · [Sécurité et protection](#-sécurité-et-protection) · [Configuration](#-configuration) · [Démarrage rapide](#-démarrage-rapide) · [Tests](#-tests) · [Dépannage](#-dépannage) · [Structure du dépôt](#-structure-du-dépôt) · [Projets liés](#-projets-liés)
 
 ## 🚦 État du projet
 
@@ -39,11 +51,11 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 | Domaine | État | Ce que cela veut dire ici |
 |---|---|---|
 | Logiciel | 🟡 | Fonctionne pour son usage principal ; la vérification d'honnêteté ci-dessus liste ce qui manque encore |
-| Tests | 🟠 | Aucun nombre de tests n'est encore consigné pour ce dépôt |
+| Tests | 🟢 | 126 tests automatiques, exécutés à chaque modification |
 | Matériel réel | 🔴 | Pas encore : aucune exécution sur du matériel réel n'est consignée pour cette version |
 | Documentation | 🟢 | README en huit langues, vérifié par rapport au manifeste à chaque modification |
 
-## 1. 🛠️ APERÇU TECHNIQUE
+## 🎯 Présentation
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** est la passerelle d'ingestion qui reçoit la télémétrie qui lui est envoyée en HTTP et l'écrit dans le Datalake. Elle convertit en échantillons normalisés les trames CAN et les messages JSON WebSocket qu'elle reçoit ; elle n'écoute pas elle-même de bus CAN (prévu).
 
@@ -61,9 +73,18 @@ Elle normalise et dédoublonne des entrées hétérogènes, afin que des mesures
 * 📊 **Métriques Prometheus :** `GET /metrics` expose les mêmes compteurs en direct d'ingestion et de perte que `GET /stats` (ingérés, abandonnés, en quarantaine, échecs d'envoi de transport ou de données invalides, occupation du tampon) au vrai format texte de Prometheus. *(implémenté)*
 * 🧰 **Pannes, priorités et métriques protégées (tout est optionnel) :** `-spool <fichier>` garde sur disque les échantillons d'une longue panne du datalake (limitée par `-spool-max-bytes`) et les renvoie d'abord quand il répond de nouveau ; `-priority type=niveau,...` permet à un tampon plein d'abandonner l'échantillon le moins important pour un plus important (compté dans `evicted`) ; `-datalake-permanent-statuses 401,403,404` abandonne au lieu de réessayer indéfiniment ; `-metrics-token` fait exiger un jeton par `GET /stats` et `GET /metrics`. Ils indiquent la latence du dernier et du plus lent envoi et l'âge du plus ancien échantillon du tampon. Tout est désactivé par défaut. *(implémenté)*
 
----
+## 🧩 Rôle dans HYDRA-UMC
 
-## 2. 🔄 FLUX DE TRAVAIL D'INGESTION
+**HYDRA-UMC-TELEMETRY-COLLECTOR** reçoit la télémétrie de trames CAN, de messages WebSocket et de l'état MQTT des bridges, écarte les doublons d'un renvoi, tient un tampon borné et livre des lots à `HYDRA-UMC-DATALAKE`, avec un spool optionnel sur disque pour les pannes. Sans datalake il affiche ce qu'il aurait écrit.
+
+## 🏛️ Architecture
+
+<p align="center">
+  <img src="images/architecture.svg" alt="HYDRA-UMC-TELEMETRY-COLLECTOR architecture" width="100%">
+</p>
+
+<details>
+<summary>Version texte du diagramme (Mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -74,9 +95,9 @@ flowchart LR
     BUF --> LAKE["HYDRA-UMC-DATALAKE"]
 ```
 
----
+</details>
 
-## 3. 🧱 ARCHITECTURE & DÉCISIONS DE CONCEPTION
+### ARCHITECTURE & DÉCISIONS DE CONCEPTION
 
 * **Pourquoi `src/` est la racine du module Go, pas la racine du dépôt.** Garde les propres fichiers du module installable (`main.go`, `version.go`, `go.mod`) séparés de l'outillage à la racine du dépôt (`bump_version.py`, `docker-compose.yml`) - `go build ./...` s'exécute depuis l'intérieur de `src/`, pas depuis la racine du dépôt.
 * **Pourquoi la collecte est séparée de HYDRA-UMC-DATALAKE lui-même.** La collecte (interroger HYDRA-UMC-SERVER, mettre en tampon, grouper les écritures) est une préoccupation liée aux E/S distincte du stockage/de la requête - la garder comme processus séparé signifie qu'un redémarrage du collecteur ou un pic de contre-pression ne touche pas le propre chemin de requête du lac de données.
@@ -88,55 +109,48 @@ flowchart LR
 * **Pourquoi la déduplication est un package `dedup` séparé, indexé sur un `Sequence` optionnel, et non un hachage du contenu de l'échantillon lui-même.** Une vraie reconnexion renvoie les mêmes octets identiques, donc le hachage de contenu fonctionnerait pour ce cas - mais il avalerait aussi silencieusement deux échantillons réellement différents qui partagent par hasard tous les champs (par ex. deux lectures de `0.0` à une seconde d'intervalle). Un numéro de séquence par producteur est ce qu'un vrai appareil doit déjà suivre pour ses propres messages non acquittés, donc le réutiliser est le signal honnête et réel - pas une supposition tirée de données qui ne promettent pas réellement l'unicité. `Sequence == 0`/omis exclut entièrement un producteur, donc rien du comportement préexistant ne change pour un appareil qui n'en envoie pas.
 * **Pourquoi `sink.InvalidDataError` porte l'`Index` de l'échantillon rejeté dans le lot.** Trouvé en auditant le code (P1) : `DatalakeSink.Write` envoie un échantillon par requête HTTP et s'arrête au premier échec, donc lorsque DATALAKE renvoie un vrai HTTP 400 pour un échantillon précis, `Write` marque la position de cet échantillon dans le lot sur l'erreur elle-même avant de la renvoyer. `FlushOnce` s'en sert pour mettre en quarantaine (abandonner définitivement, ne jamais remettre en file) exactement cet échantillon - réessayer les mêmes octets rejetés ne peut jamais réussir - tout en continuant à remettre en file le reste du lot normalement, plutôt que de réessayer (et de rebloquer) le lot entier pour toujours derrière un échantillon empoisonné. `quarantined` dans `GET /stats` comptabilise chaque échantillon ainsi abandonné, séparément de `invalidDataErrors` (des tentatives de flush, pas des échantillons) et de `dropped` (une limite de capacité du tampon plein, pas un rejet définitif) - rien de tout cela n'est donc un abandon silencieux, et `invalidDataErrors` face à `transportErrors` permet toujours à un opérateur de distinguer « DATALAKE rejette nos données » de « le réseau vers DATALAKE est en panne » sans avoir à deviner à partir des logs.
 
----
+## 🔒 Sécurité et protection
 
-## 📂 STRUCTURE DES RÉPERTOIRES
+| Menace | Défense | Où |
+|---|---|---|
+| N'importe qui sur le réseau alimentant les routes d'ingestion | Avec un `-addr` non local et sans jeton le collecteur refuse de démarrer sauf si `-allow-anonymous` est donné ; le jeton vient de `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` | `src/guard.go` |
+| Des échantillons datés du futur lointain, ou un déluge de sources | Un échantillon à plus de 5 minutes en avance sur l'horloge est refusé (`-max-future-skew`), les identifiants de source s'arrêtent à 128 caractères, les corps à 1 MiB et la table de déduplication à 10 000 sources | `src/telemetry/sample.go`, `src/api/api.go`, `src/dedup/dedup.go` |
+| Identifiants du broker circulant en clair | Un nom d'utilisateur et un mot de passe pour un broker d'une autre machine exigent `tls://` ou le `-mqtt-allow-plaintext` explicite ; le mot de passe vient d'un fichier ou de `HYDRA_UMC_TELEMETRY_MQTT_PASSWORD`, jamais d'une option | `src/main.go`, `src/mqttin/client.go` |
 
-Service purement logiciel (nœud d'ingestion) - sans matériel, micrologiciel ou système d'exploitation propres ; ces dossiers sont omis conformément à la politique de structure du dépôt.
+## ⚙️ Configuration
 
-```text
-HYDRA-UMC-TELEMETRY-COLLECTOR/
-├── src/                  # Module Go
-│   ├── go.mod            # Définition du module
-│   ├── version.go        # const Version = "X.Y.Z"
-│   ├── main.go           # Point d'entrée : relie tout, démarre l'API HTTP
-│   ├── guard.go        # Garde de démarrage : loopback uniquement sauf jeton Bearer
-│   ├── guard_test.go   # Tests de la garde de démarrage en boucle locale seule
-│   ├── mqttin/         # Transforme ce que disent les bridges sur MQTT (état, disponibilité) en échantillons de télémétrie
-│   ├── telemetry/        # Type Sample + analyseurs CAN/WebSocket (normalisation)
-│   ├── buffer/           # File FIFO bornée signalant la contre-pression (Ring)
-│   ├── dedup/            # Déduplication réelle par séquence par producteur (fenêtre de réordonnancement)
-│   ├── collector/        # Orchestre ingestion+vidage, réessaie si le sink échoue, dédup
-│   ├── sink/              # Où vont les lots envoyés (le data lake en HTTP ou la console), classification des erreurs de transport et de données invalides
-│   ├── spool/          # File optionnelle sur disque qui garde les échantillons d'une longue panne de la destination
-│   └── api/                # Handlers JSON/HTTP simples encapsulant le collecteur
-├── docs/
-│   └── API.md              # Référence réelle des endpoints HTTP (requêtes, réponses, codes de statut)
-├── images/               # Médias et diagrammes
-├── systemd/
-│   └── hydra-umc-telemetry-collector.service # Unité systemd de l'API locale d'ingestion de télémétrie sur la CM5
-├── tools/
-│   ├── build_test.py     # Vérification de build sans versionnage
-│   ├── ci_validate.py    # Validation manifeste/CHANGELOG/docs utilisée par CI
-│   ├── _doc_policy.py    # Règles de documentation partagées par la famille (copie de celle de HYDRA-UMC-SDK, tenue synchronisée)
-│   ├── _readme_parity.py # Contrôle que les huit README partagent la même structure (copie de celui de HYDRA-UMC-SDK, tenue synchronisée)
-│   └── hydra_project_tool.py # Les mêmes commandes dans chaque dépôt : validate, test, ci, version, status, bump
-├── build/                # Binaires compilés (ignoré par git)
-├── bump_version.py        # Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)
-├── bump_manifest_version.py # Synchronise la version de hydra-umc.project.json avec la version native (--sync)
-├── build.sh / build.bat   # Valide et compile (compiler ne change jamais la version)
-├── run.sh / run.bat       # Exécution réelle : lance le binaire compilé
-└── README.md
+Tout se règle par options ; les secrets peuvent aussi venir de l'environnement.
+
+| Variable | Par défaut | Ce qu'elle définit |
+|---|---|---|
+| `-addr` | `127.0.0.1:8092` | adresse de l'API HTTP |
+| `-buffer` | `10000` | échantillons retenus en attendant la livraison |
+| `-flush-interval` | `2s` | fréquence de vidage du tampon |
+| `-batch-size` | `500` | nombre maximal d'échantillons par vidage |
+| `-datalake-url` | aucun | datalake où écrire ; vide, affiche sur la sortie standard |
+| `-token` / `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` | aucun | jeton Bearer exigé par les routes d'ingestion |
+| `-metrics-token` / `HYDRA_UMC_TELEMETRY_COLLECTOR_METRICS_TOKEN` | aucun | jeton exigé par `GET /stats` et `GET /metrics` |
+| `-datalake-token` / `HYDRA_UMC_DATALAKE_TOKEN` | aucun | jeton envoyé au datalake avec chaque échantillon |
+| `-spool`, `-spool-max-bytes` | désactivé ; 256 MiB | fichier qui garde les échantillons d'une panne du datalake, et son plafond de taille |
+| `-mqtt-url` | aucun | broker d'où lire l'état des bridges ; vide, l'entrée MQTT reste éteinte |
+
+## 🚀 Démarrage rapide
+
+Nécessite Go 1.24 ou plus récent.
+
+```bash
+./build.sh  # Linux, macOS (build.bat on Windows)
+./run.sh -addr 127.0.0.1:8092
+./run.sh -addr 127.0.0.1:8092 -datalake-url http://localhost:8095 -spool spool.jsonl
 ```
 
-Élagué du modèle original : `hardware/`, `firmware/` et `os/` — il s'agit
-d'un service purement logiciel (binaire Go) sans matériel ni firmware
-propres et sans image de système d'exploitation à maintenir. Voir
-[`docs/API.md`](docs/API.md) pour la référence complète des endpoints HTTP.
+## 🧪 Tests
 
----
+126 tests automatiques s'exécutent avec `cd src && go test ./...`. Ils n'ont besoin ni de matériel ni de rien en dehors de cette machine.
 
-## 4. ⚙️ BUILD ET EXÉCUTION
+La CI exécute `HYDRA_UMC_CI=1 python tools/ci_validate.py`, qui vérifie le manifeste, les documents, les huit README et les images.
+
+## 🏗️ Compilation et publication
 
 Nécessite Go >= 1.21. Un véritable pipeline d'ingestion avec une API HTTP,
 pas seulement un squelette qui compile.
@@ -185,17 +199,69 @@ cd src && go test ./...   # telemetry (aller-retour CAN, validation WS),
                            # et api (allers-retours HTTP reels via httptest)
 ```
 
----
+## 🩺 Dépannage
 
-## 🚀 FEUILLE DE ROUTE
+| Vous voyez | Parce que | Faites |
+|---|---|---|
+| HTTP 503 | Le tampon est plein et aucune priorité ne permet d'écarter un échantillon en file | Vérifiez le datalake, ajoutez `-spool`, augmentez `-buffer` ou définissez `-priority` |
+| HTTP 401 | Un jeton est défini et la requête n'en a pas ou un faux | Envoyez `Authorization: Bearer <token>` |
+
+## 📂 Structure du dépôt
+
+<p align="center">
+  <img src="images/repository-structure.svg" alt="Repository structure of HYDRA-UMC-TELEMETRY-COLLECTOR" width="100%">
+</p>
+
+<details>
+<summary>Version texte de l'arborescence</summary>
+
+```text
+HYDRA-UMC-TELEMETRY-COLLECTOR/
+├── src/                       Module Go
+│   ├── go.mod                 Définition du module
+│   ├── version.go             const Version = "X.Y.Z"
+│   ├── main.go                Point d'entrée : relie tout, démarre l'API HTTP
+│   ├── guard.go               Garde de démarrage : loopback uniquement sauf jeton Bearer
+│   ├── guard_test.go          Tests de la garde de démarrage en boucle locale seule
+│   ├── mqttin/                Transforme ce que disent les bridges sur MQTT (état, disponibilité) en échantillons de télémétrie
+│   ├── telemetry/             Type Sample + analyseurs CAN/WebSocket (normalisation)
+│   ├── buffer/                File FIFO bornée signalant la contre-pression (Ring)
+│   ├── dedup/                 Déduplication réelle par séquence par producteur (fenêtre de réordonnancement)
+│   ├── collector/             Orchestre ingestion+vidage, réessaie si le sink échoue, dédup
+│   ├── sink/                  Où vont les lots envoyés (le data lake en HTTP ou la console), classification des erreurs de transport et de données invalides
+│   ├── spool/                 File optionnelle sur disque qui garde les échantillons d'une longue panne de la destination
+│   └── api/                   Handlers JSON/HTTP simples encapsulant le collecteur
+├── docs/                      documents du projet
+├── images/                    Médias et diagrammes
+├── systemd/                   unité de service
+├── tools/                     outils du projet et vérifications de la CI
+├── .github/                   workflow de CI et modèles de tickets
+├── bump_version.py            Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)
+├── bump_manifest_version.py   Synchronise la version de hydra-umc.project.json avec la version native (--sync)
+├── build.sh / build.bat       Valide et compile (compiler ne change jamais la version)
+├── run.sh / run.bat           Exécution réelle : lance le binaire compilé
+├── CHANGELOG.md               ce qui a changé à chaque version
+├── build-test.sh              vérification de build sans modification
+├── hydra-umc.project.json     manifeste : version, maturité, famille
+└── test.sh                    lance les tests
+```
+
+</details>
+
+## 🗺️ Feuille de route et limites connues
+
+**Limites connues aujourd'hui**
+
 * **Phase 1 :** Ingestion à haut débit du Datalake et indexation pour l'analyse historique.
 * **Phase 2 :** Compression à la périphérie du collecteur de télémétrie et protocoles de transmission sécurisés.
 * **Phase 3 :** Détection d'anomalies à l'aide de l'apprentissage non supervisé et analyse des vibrations du moteur.
 * **Phase 4 :** Compression à la volée pour l'ingestion massive de journaux et optimisation multi-protocole.
 
----
+## 🌍 Langues
 
-## 🔗 Projets Liés
+Ce README et les documents du dépôt existent en huit langues : anglais, espagnol, allemand, français, italien, japonais, chinois et portugais (Portugal). Ils sont écrits ensemble et la CI vérifie que les huit fichiers ont les mêmes sections et les mêmes liens. Ce dépôt n'a ni écran ni catalogue de messages propre, il n'y a donc aucune chaîne d'interface à traduire.
+
+## 🔗 Projets liés
 
 Ce projet fait partie de l'écosystème robotique HYDRA-UMC du même auteur (JuanenRac / Electro Hobby 3D). Bon à savoir, car une demande pourrait en réalité concerner l'un de ceux-ci plutôt que ce dépôt.
 
@@ -286,21 +352,26 @@ Ce projet fait partie de l'écosystème robotique HYDRA-UMC du même auteur (Jua
 - **[HYDRA-UMC-OPS-AGENT](https://github.com/JuanenRac/HYDRA-UMC-OPS-AGENT)** — coordinateur d'incidents de maintenance : un rôle edge à faible privilège collecte un instantané d'inventaire/santé assaini, un rôle control-plane le rend en lecture seule et demande à un fournisseur d'IA de suggérer un diagnostic - n'applique jamais de correctif ni ne déploie rien.
 - **[HYDRA-UMC-DEV-SERVER](https://github.com/JuanenRac/HYDRA-UMC-DEV-SERVER)** — hôte de développement reproductible (Raspberry Pi 5 / CM5) qui héberge le code source de l'écosystème et exécute des tâches de compilation/test délimitées via une file d'attente durable ; un rôle de développement dédié, explicitement distinct d'un CM5 opérationnel.
 
+## 📚 Documentation
 
----
+Où lire la suite :
 
-## 📚 Documentation & Communauté
+* [Base de sécurité de l'écosystème](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md)
+* [Modèle de menaces de l'écosystème](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md)
+* [Journal des modifications de ce dépôt](CHANGELOG.md)
+* [Licence de ce dépôt](LICENSE.md)
 
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — pile technologique et lignes directrices de codage pour une pull request.
-- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** — les normes de comportement attendues dans cette communauté.
-- **[SECURITY.md](SECURITY.md)** — comment signaler une vulnérabilité, et les véritables axes de sécurité de ce projet.
-- **[SUPPORT.md](SUPPORT.md)** — où poser des questions et signaler des bugs.
-- **[LICENSE.md](LICENSE.md)** — la licence propre de ce projet.
+## 🤝 Contribuer et communauté
+
+* Avant une pull request, exécutez `HYDRA_UMC_CI=1 py -3 tools/ci_validate.py` (ou `HYDRA_UMC_CI=1 python3 tools/ci_validate.py`) : il doit afficher `CI_VALIDATION=PASS`. N'exécutez pas `build.sh` ni `build.bat` pour cette vérification ; compiler n'est pas vérifier.
+* Les huit README sont écrits à partir d'une source unique dans HYDRA-UMC-DOCS ; ne les modifiez pas à la main. Changez la source et réécrivez-les avec `tools/make_readmes.py`.
+* N'affirmez pas dans un README ce qui n'a pas tourné : écrivez « simulé » ou « non essayé sur matériel » quand c'est la vérité.
+* Voir [CONTRIBUTING.md](CONTRIBUTING.md), le [code de conduite](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md) et [SUPPORT.md](SUPPORT.md).
 
 ## 👤 AUTEUR
-**JuanenRac** (Electro Hobby 3D)
-📧 electrohobby3d@gmail.com
-📺 [youtube.com/@electrohobby3d](https://youtube.com/@electrohobby3d)
+
+**JuanenRac (Electro Hobby 3D)** · electrohobby3d@gmail.com
 
 ## 📜 LICENCE
-GPL-3.0 - Voir le fichier LICENSE pour plus de détails.
+
+GPL-3.0-or-later - [LICENSE](LICENSE).

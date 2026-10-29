@@ -1,3 +1,9 @@
+<!-- =============================================================================
+HYDRA-UMC-TELEMETRY-COLLECTOR - Ingestion node for CAN, WebSocket and MQTT telemetry
+Copyright (C) JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
+GPL-3.0-or-later - see LICENSE
+============================================================================= -->
+
 <p align="center">
   <img src="images/HYDRA_UMC_BANNER.svg" alt="HYDRA-UMC-TELEMETRY-COLLECTOR banner" width="100%">
 </p>
@@ -9,16 +15,19 @@
 ### 🚀 面向 CAN 和 WebSocket 日志的高吞吐量摄取节点
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Go">
+  <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
+  <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
+  <img src="https://img.shields.io/badge/Tests-126%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Version-0.1.8-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
-
-**诚实核查 - 今天真正能运行的部分：** 真实的摄取管道——`telemetry` 将 CAN 帧和 WebSocket JSON 解析为规范化的 `Sample`、`buffer` 带有背压报告的有界环形缓冲区、`collector` 的摄取+刷新编排(向下游写入失败时会将整批数据重新排队而不是丢弃)、`dedup` 的可重连安全的按生产者序列号跟踪，以及 `sink` 真实的 `DatalakeSink`(针对实现了 DATALAKE 自身 `POST /ingest` 的真实 `net/http/httptest.Server` 测试过)或其 `ConsoleSink` 回退方案——这些都是真实的并经过测试(51 个测试，`go test ./...`)。在集成前需要了解的两个真实缺口：本采集器本身并不打开到物理 FDCAN 总线的真实连接，也不接受来自机器人的实时 WebSocket 连接——摄取是通过其自身的简单 HTTP API(`POST /ingest/can`、`POST /ingest/ws`)完成的，因此仍需要有其他组件读取真实总线/套接字并将帧转发到这里。而且 `telemetry/can.go` 自身的 CAN 帧格式(信号代码字节 + float32 值)是本项目自行声明的 v0 占位约定，尚不是生态系统在 HYDRA-UMC/URTC 自身固件中真正记录的 CAN ID 表——刻意没有去猜测。输出目前只有真实的 JSON；README 自身提到的"JSON/Protobuf"以及 gRPC 摄取仍处于计划阶段，本代码库中任何地方都尚未实现。具体已交付的内容请见 `CHANGELOG.md`。
 
 ---
 
 > **安全与安防现状:**本生态系统不是经认证的安全系统。目前尚无硬件 E-STOP 通路,没有由固件强制执行的限位或联锁,也没有经过验证的运动指令;固件映像使用 CRC32 和共享密钥的 HMAC-SHA256 校验,而非非对称签名;TLS 与双向 TLS 均为可选项,默认关闭;自制电路板尚未组装或测试。在依赖此处任何说法来保障人身安全之前,请先阅读[安全基线](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md)和[威胁模型](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md)。
+
+---
 
 ## 📋 速览
 
@@ -26,9 +35,12 @@
 |---|---|
 | 版本 | `0.1.8` |
 | 成熟度 | 可用 |
+| 测试 | 126 (`go test ./...`) |
 | 技术栈 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | 目标 | HYDRA-UMC 工作单元的 Raspberry Pi CM5 |
 | 真实硬件 | 尚未：此版本没有在真实硬件上运行的记录 |
+
+**跳转：** [概述](#-概述) · [架构](#-架构) · [安全与防护](#-安全与防护) · [配置](#-配置) · [快速开始](#-快速开始) · [测试](#-测试) · [故障排除](#-故障排除) · [仓库结构](#-仓库结构) · [相关项目](#-相关项目)
 
 ## 🚦 项目状态
 
@@ -39,11 +51,11 @@
 | 领域 | 状态 | 在这里的含义 |
 |---|---|---|
 | 软件 | 🟡 | 主要用途可用；上面的诚实性检查列出了仍然缺少的内容 |
-| 测试 | 🟠 | 此仓库尚未记录测试数量 |
+| 测试 | 🟢 | 126 项自动测试，每次变更都会运行 |
 | 真实硬件 | 🔴 | 尚未：此版本没有在真实硬件上运行的记录 |
 | 文档 | 🟢 | 八种语言的 README，每次变更都会与清单核对 |
 
-## 1. 🛠️ 技术概述
+## 🎯 概述
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** 是接收通过 HTTP 推送给它的遥测数据并写入 Datalake 的摄取网关。它把收到的 CAN 帧和 WebSocket JSON 消息解析为规范化样本;它自己目前不监听 CAN 总线(计划中)。
 
@@ -61,9 +73,18 @@
 * 📊 **Prometheus 指标：** `GET /metrics` 以真正的 Prometheus 文本格式提供与 `GET /stats` 相同的实时摄取与丢失计数器（已摄取、已丢弃、已隔离、传输与无效数据导致的发送失败、缓冲区占用）。 *(已实现)*
 * 🧰 **故障、优先级与受保护的指标（均为可选）：** `-spool <文件>` 把数据湖长时间故障期间的样本保存在磁盘上（由 `-spool-max-bytes` 限制），恢复后优先重发；`-priority 类型=级别,...` 让已满的缓冲区丢弃最不重要的样本以容纳更重要的样本（计入 `evicted`）；`-datalake-permanent-statuses 401,403,404` 直接丢弃而不是无限重试；`-metrics-token` 让 `GET /stats` 与 `GET /metrics` 需要令牌。还会报告最近一次与最慢一次发送的延迟，以及缓冲区中最旧样本的存在时间。全部默认关闭。 *(已实现)*
 
----
+## 🧩 在 HYDRA-UMC 中的角色
 
-## 2. 🔄 摄取工作流
+**HYDRA-UMC-TELEMETRY-COLLECTOR** 接收来自 CAN 帧、WebSocket 消息和桥接 MQTT 状态的遥测数据，丢弃重发造成的重复，保持有界缓冲，并把批次交给 `HYDRA-UMC-DATALAKE`；可选的磁盘缓存用于应对中断。没有数据湖时，它会打印本该写入的内容。
+
+## 🏛️ 架构
+
+<p align="center">
+  <img src="images/architecture.svg" alt="HYDRA-UMC-TELEMETRY-COLLECTOR architecture" width="100%">
+</p>
+
+<details>
+<summary>图表的文本版本（Mermaid）</summary>
 
 ```mermaid
 flowchart LR
@@ -74,9 +95,9 @@ flowchart LR
     BUF --> LAKE["HYDRA-UMC-DATALAKE"]
 ```
 
----
+</details>
 
-## 3. 🧱 架构与设计决策
+### 架构与设计决策
 
 * **为何 `src/` 是 Go 模块根目录，而非仓库根目录。** 使可安装模块自身的文件（`main.go`、`version.go`、`go.mod`）与仓库根目录的工具（`bump_version.py`、`docker-compose.yml`）分离——`go build ./...` 在 `src/` 内部运行，而非仓库根目录。
 * **为何数据采集与 HYDRA-UMC-DATALAKE 本身是分离的。** 数据采集（轮询 HYDRA-UMC-SERVER、缓冲、批量写入）是一项与存储/查询截然不同的 I/O 密集型任务——将其保持为独立进程，意味着一次采集器重启或背压峰值不会触及数据湖自身的查询路径。
@@ -88,55 +109,48 @@ flowchart LR
 * **为何去重是一个独立的 `dedup` 包，以可选的 `Sequence` 为键，而非对样本自身内容做哈希。** 真实的重连会重发完全相同的字节，因此内容哈希对这种情况确实有效——但它也会悄悄吞掉两个碰巧所有字段都相同的、真正不同的样本（例如相隔一秒的两次 `0.0` 读数）。按生产者维护的序列号正是真实设备本就需要用来跟踪自身未确认消息的东西，因此复用它才是诚实、真实的信号——而不是从并不真正承诺唯一性的数据中猜测出来的东西。`Sequence == 0`/省略会使某个生产者完全选择退出去重，因此对于不发送该字段的设备，既有行为不会有任何变化。
 * **为何 `sink.InvalidDataError` 携带被拒绝样本在批次中的 `Index`。** 在一次生态系统范围的软件改进审计中发现（P1）：`DatalakeSink.Write` 每次 HTTP 请求发送一条样本，遇到第一个失败就停止，因此当 DATALAKE 针对某条具体样本返回真实的 HTTP 400 时，`Write` 会在返回错误之前，把该样本在批次中的位置记录到错误本身上。`FlushOnce` 利用这一点，精确地隔离（永久丢弃，永不重新入队）那一条样本——重试完全相同、已被拒绝的字节永远不可能成功——同时批次中的其余部分仍会照常重新入队，而不是让整个批次永远在一条有毒样本后面被反复重试（并反复被阻塞）。`GET /stats` 中的 `quarantined` 统计的正是这样被丢弃的样本数，与 `invalidDataErrors`（flush 尝试次数，而非样本数）以及 `dropped`（缓冲区已满的容量限制，而非永久拒绝）是分开的——所以这一切都不是静默丢弃，`invalidDataErrors` 与 `transportErrors` 仍然让运维人员无需从日志中猜测，就能分辨出「DATALAKE 正在拒绝我们的数据」还是「到 DATALAKE 的网络中断了」。
 
----
+## 🔒 安全与防护
 
-## 📂 目录结构
+| 威胁 | 防御 | 位置 |
+|---|---|---|
+| 网络上任何人向摄取路由写入数据 | 使用非回环 `-addr` 且没有令牌时，除非给出 `-allow-anonymous`，采集器拒绝启动；令牌来自 `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` | `src/guard.go` |
+| 时间戳在遥远未来的样本，或大量的来源 | 比时钟提前超过 5 分钟的样本会被拒绝（`-max-future-skew`），来源 ID 最长 128 个字符，请求体最大 1 MiB，去重表最多 10 000 个来源 | `src/telemetry/sample.go`, `src/api/api.go`, `src/dedup/dedup.go` |
+| 代理的凭据以明文传输 | 向另一台机器上的代理发送用户名和密码需要 `tls://`，或显式的 `-mqtt-allow-plaintext`；密码来自文件或 `HYDRA_UMC_TELEMETRY_MQTT_PASSWORD`，从不通过选项传入 | `src/main.go`, `src/mqttin/client.go` |
 
-纯软件服务（摄取节点）——没有自己的硬件、固件或操作系统；这些目录按照
-仓库结构策略予以省略。
+## ⚙️ 配置
 
-```text
-HYDRA-UMC-TELEMETRY-COLLECTOR/
-├── src/                  # Go 模块
-│   ├── go.mod            # 模块定义
-│   ├── version.go        # const Version = "X.Y.Z"
-│   ├── main.go           # 入口点：连接一切，启动 HTTP API
-│   ├── guard.go        # 启动守卫：除非设置了 Bearer 令牌，否则仅限回环
-│   ├── guard_test.go   # 仅限本机回环的启动保护测试
-│   ├── mqttin/         # 把各 bridge 通过 MQTT 发出的内容 (状态、可用性) 转为遥测样本
-│   ├── telemetry/        # Sample 类型 + CAN/WebSocket 解析器（归一化）
-│   ├── buffer/           # 带背压报告的有界 FIFO（Ring）
-│   ├── dedup/            # 真实的按生产者序列号去重（重排序窗口）
-│   ├── collector/        # 编排摄取+刷新，sink 失败时重试，去重
-│   ├── sink/              # 已刷新批次的去向 (经 HTTP 的数据湖或控制台),传输错误与无效数据的分类
-│   ├── spool/          # 可选的磁盘队列，保存目标长时间故障期间的样本
-│   └── api/                # 封装 collector 的简单 JSON/HTTP 处理器
-├── docs/
-│   └── API.md              # 真实的 HTTP 端点参考（请求、响应、状态码）
-├── images/               # 媒体与图表
-├── systemd/
-│   └── hydra-umc-telemetry-collector.service # 本地 CM5 遥测数据摄取 API 的 systemd 单元
-├── tools/
-│   ├── build_test.py     # 不递增版本号的构建检查
-│   ├── ci_validate.py    # CI 使用的清单/CHANGELOG/文档校验
-│   ├── _doc_policy.py    # 家族共享的文档规则 (HYDRA-UMC-SDK 的副本,保持同步)
-│   ├── _readme_parity.py # 检查八个 README 结构一致 (HYDRA-UMC-SDK 的副本,保持同步)
-│   └── hydra_project_tool.py # 每个仓库相同的命令: validate、test、ci、version、status、bump
-├── build/                # 编译后的二进制文件（已被 gitignore）
-├── bump_version.py        # 里程表式版本递增（仅由显式 `bump` 命令运行）
-├── bump_manifest_version.py # 将 hydra-umc.project.json 的版本与原生版本同步(--sync)
-├── build.sh / build.bat   # 验证并构建（构建不会更改版本）
-├── run.sh / run.bat       # 真实运行：执行编译后的二进制文件
-└── README.md
+全部通过选项配置；密钥也可以来自环境变量。
+
+| 变量 | 默认值 | 设置内容 |
+|---|---|---|
+| `-addr` | `127.0.0.1:8092` | HTTP API 的地址 |
+| `-buffer` | `10000` | 等待投递时保留的样本数 |
+| `-flush-interval` | `2s` | 缓冲区清空的频率 |
+| `-batch-size` | `500` | 每次清空的最大样本数 |
+| `-datalake-url` | 无 | 要写入的数据湖；为空则打印到标准输出 |
+| `-token` / `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN` | 无 | 摄取路由所需的 Bearer 令牌 |
+| `-metrics-token` / `HYDRA_UMC_TELEMETRY_COLLECTOR_METRICS_TOKEN` | 无 | `GET /stats` 和 `GET /metrics` 所需的令牌 |
+| `-datalake-token` / `HYDRA_UMC_DATALAKE_TOKEN` | 无 | 随每个样本发送给数据湖的令牌 |
+| `-spool`, `-spool-max-bytes` | 关闭；256 MiB | 保存数据湖中断期间样本的文件及其大小上限 |
+| `-mqtt-url` | 无 | 读取桥接状态的代理；为空则关闭 MQTT 输入 |
+
+## 🚀 快速开始
+
+需要 Go 1.24 或更高版本。
+
+```bash
+./build.sh  # Linux, macOS (build.bat on Windows)
+./run.sh -addr 127.0.0.1:8092
+./run.sh -addr 127.0.0.1:8092 -datalake-url http://localhost:8095 -spool spool.jsonl
 ```
 
-从原始模板中省略：`hardware/`、`firmware/` 和 `os/`——这是一个纯软件服务
-（Go 二进制文件），没有专属硬件或固件，也没有需要维护的操作系统镜像。
-完整的 HTTP 端点参考见 [`docs/API.md`](docs/API.md)。
+## 🧪 测试
 
----
+运行 `cd src && go test ./...` 会执行 126 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
 
-## 4. ⚙️ 构建与运行
+CI 运行 `HYDRA_UMC_CI=1 python tools/ci_validate.py`，检查清单、文档、八个 README 和图片。
+
+## 🏗️ 构建与发布
 
 需要 Go >= 1.21。一个带有 HTTP API 的真实摄取流水线，而不只是一个能
 编译的骨架。
@@ -182,15 +196,67 @@ cd src && go test ./...   # telemetry（CAN 往返、WS 校验）、buffer
                            # api（通过 httptest 的真实 HTTP 往返测试）
 ```
 
----
+## 🩺 故障排除
 
-## 🚀 路线图
+| 你看到 | 原因 | 处理 |
+|---|---|---|
+| HTTP 503 | 缓冲区已满，且没有优先级允许丢弃排队中的样本 | 检查数据湖，添加 `-spool`，增大 `-buffer` 或设置 `-priority` |
+| HTTP 401 | 已设置令牌，而请求没带或带错了 | 发送 `Authorization: Bearer <token>` |
+
+## 📂 仓库结构
+
+<p align="center">
+  <img src="images/repository-structure.svg" alt="Repository structure of HYDRA-UMC-TELEMETRY-COLLECTOR" width="100%">
+</p>
+
+<details>
+<summary>目录树的文本版本</summary>
+
+```text
+HYDRA-UMC-TELEMETRY-COLLECTOR/
+├── src/                       Go 模块
+│   ├── go.mod                 模块定义
+│   ├── version.go             const Version = "X.Y.Z"
+│   ├── main.go                入口点：连接一切，启动 HTTP API
+│   ├── guard.go               启动守卫：除非设置了 Bearer 令牌，否则仅限回环
+│   ├── guard_test.go          仅限本机回环的启动保护测试
+│   ├── mqttin/                把各 bridge 通过 MQTT 发出的内容 (状态、可用性) 转为遥测样本
+│   ├── telemetry/             Sample 类型 + CAN/WebSocket 解析器（归一化）
+│   ├── buffer/                带背压报告的有界 FIFO（Ring）
+│   ├── dedup/                 真实的按生产者序列号去重（重排序窗口）
+│   ├── collector/             编排摄取+刷新，sink 失败时重试，去重
+│   ├── sink/                  已刷新批次的去向 (经 HTTP 的数据湖或控制台),传输错误与无效数据的分类
+│   ├── spool/                 可选的磁盘队列，保存目标长时间故障期间的样本
+│   └── api/                   封装 collector 的简单 JSON/HTTP 处理器
+├── docs/                      项目文档
+├── images/                    媒体与图表
+├── systemd/                   服务单元
+├── tools/                     项目工具和 CI 检查
+├── .github/                   CI 工作流和 Issue 模板
+├── bump_version.py            显式提升版本
+├── bump_manifest_version.py   将 hydra-umc.project.json 的版本与原生版本同步(--sync)
+├── build.sh / build.bat       验证并构建（构建不会更改版本）
+├── run.sh / run.bat           真实运行：执行编译后的二进制文件
+├── CHANGELOG.md               每个版本的变更
+├── build-test.sh              不修改内容的构建检查
+├── hydra-umc.project.json     清单：版本、成熟度、系列
+└── test.sh                    运行测试
+```
+
+</details>
+
+## 🗺️ 路线图与已知限制
+
+**当前已知限制**
+
 * **第一阶段：** 数据湖的高吞吐量摄取和索引，用于历史分析。
 * **第二阶段：** 遥测采集器的边缘压缩和安全传输协议。
 * **第三阶段：** 使用无监督学习和电机振动分析进行异常检测。
 * **第四阶段：** 用于海量日志摄取的实时压缩以及多协议优化。
 
----
+## 🌍 语言
+
+本 README 和仓库文档提供八种语言：英语、西班牙语、德语、法语、意大利语、日语、中文和葡萄牙语（葡萄牙）。它们同时编写，并由 CI 检查八个文件拥有相同的章节和相同的链接。 本仓库没有自己的界面或消息目录，因此没有需要翻译的界面文字。
 
 ## 🔗 相关项目
 
@@ -283,21 +349,26 @@ cd src && go test ./...   # telemetry（CAN 往返、WS 校验）、buffer
 - **[HYDRA-UMC-OPS-AGENT](https://github.com/JuanenRac/HYDRA-UMC-OPS-AGENT)** — 维护事件协调器：一个低权限的边缘角色采集经过脱敏的库存/健康快照，一个控制面角色以只读方式渲染它，并请求某个 AI 提供方给出诊断建议——从不应用补丁，也从不部署任何内容。
 - **[HYDRA-UMC-DEV-SERVER](https://github.com/JuanenRac/HYDRA-UMC-DEV-SERVER)** — 可复现的开发主机（Raspberry Pi 5 / CM5），保存整个生态系统的源代码，并在持久队列下运行有界的构建/测试任务；这是专用的开发角色，明确区别于运行中的 CM5。
 
+## 📚 文档
 
----
+更多阅读：
 
-## 📚 文档与社区
+* [生态系统的安全基线](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md)
+* [生态系统的威胁模型](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md)
+* [本仓库的更新日志](CHANGELOG.md)
+* [本仓库的许可证](LICENSE.md)
 
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** —— 提交 Pull Request 所需的技术栈和编码规范。
-- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** —— 本社区所期望的行为准则。
-- **[SECURITY.md](SECURITY.md)** —— 如何报告漏洞，以及本项目真实的安全关注重点。
-- **[SUPPORT.md](SUPPORT.md)** —— 在哪里提问和报告缺陷。
-- **[LICENSE.md](LICENSE.md)** —— 本项目自身的许可证。
+## 🤝 参与贡献与社区
+
+* 提交 pull request 之前，请运行 `HYDRA_UMC_CI=1 py -3 tools/ci_validate.py`（或 `HYDRA_UMC_CI=1 python3 tools/ci_validate.py`）：它必须输出 `CI_VALIDATION=PASS`。此检查不要运行 `build.sh` 或 `build.bat`；构建不是检查。
+* 八个 README 由 HYDRA-UMC-DOCS 中的同一个源生成；请勿手工编辑。修改源文件，再用 `tools/make_readmes.py` 重新生成。
+* 不要在 README 中声称尚未运行过的内容：属实时请写“仅模拟”或“尚未在硬件上试过”。
+* 请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)、[SECURITY.md](SECURITY.md) 和 [SUPPORT.md](SUPPORT.md)。
 
 ## 👤 作者
-**JuanenRac** (Electro Hobby 3D)
-📧 electrohobby3d@gmail.com
-📺 [youtube.com/@electrohobby3d](https://youtube.com/@electrohobby3d)
+
+**JuanenRac (Electro Hobby 3D)** · electrohobby3d@gmail.com
 
 ## 📜 许可证
-GPL-3.0 —— 详见 LICENSE。
+
+GPL-3.0-or-later - [LICENSE](LICENSE).
