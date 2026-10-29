@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+- CI runs `staticcheck` and fails when `go mod tidy` would change `go.mod` or `go.sum` (both are clean today).
+
 ## [0.1.8] - The state of the bridges can be read from MQTT and the buffer is a real ring
 
 - **The state of the bridges can be read from MQTT** (`src/mqttin`, standard library only): with `-mqtt-url` the collector subscribes to `hydra/bridges/+/state` and `.../availability` and buffers `bridge_state` samples (every number and flag of the state, a `machine_state.<value>` flag, stamped with `observed_at`) and `bridge_availability` samples; a retained state older than `-mqtt-max-age` is skipped, a full buffer refuses like any other input, the connection comes back with a growing pause, and `GET /stats` reports `mqtt`. TLS with an optional authority file; the password comes from `-mqtt-password-file` or the environment, never from the command line, and credentials over a plain connection to another machine need `-mqtt-allow-plaintext`. Off by default. Tried against a minimal broker written for the tests, not against the ecosystem's broker.
