@@ -1,0 +1,629 @@
+{
+  "repo": "HYDRA-UMC-TELEMETRY-COLLECTOR",
+  "ecosystem": "hydra",
+  "svg": "en",
+  "exempt": [
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "LICENSE",
+    "LICENSE.md",
+    "build-test.bat",
+    "test.bat"
+  ],
+  "cards": [
+    {
+      "name": "src/",
+      "span": 3,
+      "accent": "a",
+      "rows": [
+        {
+          "name": "go.mod",
+          "desc": {
+            "en": "Module definition",
+            "es": "Definición del módulo",
+            "de": "Modul-Definition",
+            "fr": "Définition du module",
+            "it": "Definizione del modulo",
+            "ja": "モジュール定義",
+            "zh": "模块定义",
+            "pt": "Definição do módulo"
+          },
+          "tree_desc": {
+            "en": "Module definition",
+            "es": "Definición del módulo",
+            "de": "Modul-Definition",
+            "fr": "Définition du module",
+            "it": "Definizione del modulo",
+            "ja": "モジュール定義",
+            "zh": "模块定义",
+            "pt": "Definição do módulo"
+          }
+        },
+        {
+          "name": "version.go",
+          "desc": {
+            "en": "const Version = \"X.Y.Z\"",
+            "es": "const Version = \"X.Y.Z\"",
+            "de": "const Version = \"X.Y.Z\"",
+            "fr": "const Version = \"X.Y.Z\"",
+            "it": "const Version = \"X.Y.Z\"",
+            "ja": "const Version = \"X.Y.Z",
+            "zh": "const Version = \"X.Y.Z",
+            "pt": "const Version = \"X.Y.Z\""
+          },
+          "tree_desc": {
+            "en": "const Version = \"X.Y.Z\"",
+            "es": "const Version = \"X.Y.Z\"",
+            "de": "const Version = \"X.Y.Z\"",
+            "fr": "const Version = \"X.Y.Z\"",
+            "it": "const Version = \"X.Y.Z\"",
+            "ja": "const Version = \"X.Y.Z\"",
+            "zh": "const Version = \"X.Y.Z\"",
+            "pt": "const Version = \"X.Y.Z\""
+          }
+        },
+        {
+          "name": "main.go",
+          "desc": {
+            "en": "Entry point: wires everything",
+            "es": "Punto de entrada",
+            "de": "Einstiegspunkt",
+            "fr": "Point d'entrée",
+            "it": "Punto di ingresso",
+            "ja": "エントリポイント：すべてを接続し",
+            "zh": "入口点：连接一切，启动 HTTP API",
+            "pt": "Ponto de entrada"
+          },
+          "tree_desc": {
+            "en": "Entry point: wires everything, starts the HTTP API",
+            "es": "Punto de entrada: conecta todo, arranca la API HTTP",
+            "de": "Einstiegspunkt: verbindet alles, startet die HTTP-API",
+            "fr": "Point d'entrée : relie tout, démarre l'API HTTP",
+            "it": "Punto di ingresso: collega tutto, avvia l'API HTTP",
+            "ja": "エントリポイント：すべてを接続し、HTTP API を起動",
+            "zh": "入口点：连接一切，启动 HTTP API",
+            "pt": "Ponto de entrada: liga tudo e arranca a API HTTP"
+          }
+        },
+        {
+          "name": "guard.go",
+          "desc": {
+            "en": "Startup guard: loopback-only unless",
+            "es": "Guarda de arranque",
+            "de": "Startwächter: nur Loopback",
+            "fr": "Garde de démarrage",
+            "it": "Guardia di avvio",
+            "ja": "起動ガード：Bearer トークンがない限り",
+            "zh": "启动守卫：除非设置了 Bearer 令牌",
+            "pt": "Guarda de arranque"
+          },
+          "tree_desc": {
+            "en": "Startup guard: loopback-only unless a bearer token is set",
+            "es": "Guarda de arranque: solo loopback salvo que haya un token Bearer",
+            "de": "Startwächter: nur Loopback, außer ein Bearer-Token ist gesetzt",
+            "fr": "Garde de démarrage : loopback uniquement sauf jeton Bearer",
+            "it": "Guardia di avvio: solo loopback salvo token Bearer",
+            "ja": "起動ガード：Bearer トークンがない限りループバックのみ",
+            "zh": "启动守卫：除非设置了 Bearer 令牌，否则仅限回环",
+            "pt": "Guarda de arranque: só loopback, a menos que haja um token Bearer"
+          }
+        },
+        {
+          "name": "guard_test.go",
+          "desc": {
+            "en": "Tests of the loopback-only start-up guard",
+            "es": "Pruebas de la guardia de arranque",
+            "de": "Tests der Start-Sperre nur für Loopback",
+            "fr": "Tests de la garde de démarrage en boucle",
+            "it": "Test della guardia di avvio solo loopback",
+            "ja": "ループバック限定の起動ガードのテスト",
+            "zh": "仅限本机回环的启动保护测试",
+            "pt": "Testes da guarda de arranque só em loopback"
+          },
+          "tree_desc": {
+            "en": "Tests of the loopback-only start-up guard",
+            "es": "Pruebas de la guardia de arranque solo-loopback",
+            "de": "Tests der Start-Sperre nur für Loopback",
+            "fr": "Tests de la garde de démarrage en boucle locale seule",
+            "it": "Test della guardia di avvio solo loopback",
+            "ja": "ループバック限定の起動ガードのテスト",
+            "zh": "仅限本机回环的启动保护测试",
+            "pt": "Testes da guarda de arranque só em loopback"
+          }
+        },
+        {
+          "name": "mqttin/",
+          "desc": {
+            "en": "Turns what the bridges say on MQTT",
+            "es": "Convierte lo que dicen los bridges por MQTT",
+            "de": "Wandelt um, was die Bridges über MQTT melden",
+            "fr": "Transforme ce que disent les bridges sur",
+            "it": "Trasforma ciò che i bridge dicono su MQTT",
+            "ja": "ブリッジが MQTT で伝える内容",
+            "zh": "把各 bridge 通过 MQTT 发出的内",
+            "pt": "Converte o que os bridges dizem por MQTT"
+          },
+          "tree_desc": {
+            "en": "Turns what the bridges say on MQTT (state, availability) into telemetry samples",
+            "es": "Convierte lo que dicen los bridges por MQTT (estado, disponibilidad) en muestras de telemetría",
+            "de": "Wandelt um, was die Bridges über MQTT melden (Zustand, Verfügbarkeit), in Telemetrieproben",
+            "fr": "Transforme ce que disent les bridges sur MQTT (état, disponibilité) en échantillons de télémétrie",
+            "it": "Trasforma ciò che i bridge dicono su MQTT (stato, disponibilità) in campioni di telemetria",
+            "ja": "ブリッジが MQTT で伝える内容 (状態、可用性) をテレメトリのサンプルに変換",
+            "zh": "把各 bridge 通过 MQTT 发出的内容 (状态、可用性) 转为遥测样本",
+            "pt": "Converte o que os bridges dizem por MQTT (estado, disponibilidade) em amostras de telemetria"
+          }
+        },
+        {
+          "name": "telemetry/",
+          "desc": {
+            "en": "Sample type + CAN/WebSocket parsers",
+            "es": "Tipo Sample + parsers CAN/WebSocket",
+            "de": "Sample-Typ + CAN/WebSocket-Parser",
+            "fr": "Type Sample + analyseurs CAN/WebSocket",
+            "it": "Tipo Sample + parser CAN/WebSocket",
+            "ja": "Sample 型 + CAN/WebSock",
+            "zh": "Sample 类型 + CAN/WebSoc",
+            "pt": "Tipo Sample + analisadores CAN/WebSocket"
+          },
+          "tree_desc": {
+            "en": "Sample type + CAN/WebSocket parsers (normalization)",
+            "es": "Tipo Sample + parsers CAN/WebSocket (normalizacion)",
+            "de": "Sample-Typ + CAN/WebSocket-Parser (Normalisierung)",
+            "fr": "Type Sample + analyseurs CAN/WebSocket (normalisation)",
+            "it": "Tipo Sample + parser CAN/WebSocket (normalizzazione)",
+            "ja": "Sample 型 + CAN/WebSocket パーサー(正規化)",
+            "zh": "Sample 类型 + CAN/WebSocket 解析器（归一化）",
+            "pt": "Tipo Sample + analisadores CAN/WebSocket (normalização)"
+          }
+        },
+        {
+          "name": "buffer/",
+          "desc": {
+            "en": "Bounded, backpressure-reporting FIFO (Ring)",
+            "es": "FIFO acotado con reporte de contrapresion",
+            "de": "Begrenzte FIFO mit Gegendruck-Meldung (Ring)",
+            "fr": "File FIFO bornée signalant la",
+            "it": "FIFO limitato con segnalazione di",
+            "ja": "背圧を報告する有界 FIFO(Ring)",
+            "zh": "带背压报告的有界 FIFO（Ring）",
+            "pt": "FIFO limitado que reporta contrapressão"
+          },
+          "tree_desc": {
+            "en": "Bounded, backpressure-reporting FIFO (Ring)",
+            "es": "FIFO acotado con reporte de contrapresion (Ring)",
+            "de": "Begrenzte FIFO mit Gegendruck-Meldung (Ring)",
+            "fr": "File FIFO bornée signalant la contre-pression (Ring)",
+            "it": "FIFO limitato con segnalazione di contropressione (Ring)",
+            "ja": "背圧を報告する有界 FIFO(Ring)",
+            "zh": "带背压报告的有界 FIFO（Ring）",
+            "pt": "FIFO limitado que reporta contrapressão (Ring)"
+          }
+        },
+        {
+          "name": "dedup/",
+          "desc": {
+            "en": "Real per-producer sequence deduplication",
+            "es": "Deduplicación real por secuencia por",
+            "de": "Echte Deduplizierung per Sequenz pro",
+            "fr": "Déduplication réelle par séquence par",
+            "it": "Deduplicazione reale per sequenza per",
+            "ja": "実際のプロデューサーごとのシーケンス重複排除",
+            "zh": "真实的按生产者序列号去重（重排序窗口）",
+            "pt": "Deduplicação real de sequências por produtor"
+          },
+          "tree_desc": {
+            "en": "Real per-producer sequence deduplication (reorder window)",
+            "es": "Deduplicación real por secuencia por productor (ventana de reordenamiento)",
+            "de": "Echte Deduplizierung per Sequenz pro Produzent (Reorder-Fenster)",
+            "fr": "Déduplication réelle par séquence par producteur (fenêtre de réordonnancement)",
+            "it": "Deduplicazione reale per sequenza per produttore (finestra di riordino)",
+            "ja": "実際のプロデューサーごとのシーケンス重複排除(並べ替えウィンドウ)",
+            "zh": "真实的按生产者序列号去重（重排序窗口）",
+            "pt": "Deduplicação real de sequências por produtor (janela de reordenação)"
+          }
+        },
+        {
+          "name": "collector/",
+          "desc": {
+            "en": "Orchestrates ingest+flush",
+            "es": "Orquesta ingesta+flush",
+            "de": "Orchestriert Ingest+Flush",
+            "fr": "Orchestre ingestion+vidage",
+            "it": "Orchestra ingestione+flush",
+            "ja": "取り込み+フラッシュを調整、シンク失敗時に再",
+            "zh": "编排摄取+刷新，sink 失败时重试，去重",
+            "pt": "Orquestra ingestão e descarga"
+          },
+          "tree_desc": {
+            "en": "Orchestrates ingest+flush, retries on sink failure, dedup",
+            "es": "Orquesta ingesta+flush, reintenta si falla el sink, dedup",
+            "de": "Orchestriert Ingest+Flush, wiederholt bei Sink-Fehler, Dedup",
+            "fr": "Orchestre ingestion+vidage, réessaie si le sink échoue, dédup",
+            "it": "Orchestra ingestione+flush, riprova se il sink fallisce, dedup",
+            "ja": "取り込み+フラッシュを調整、シンク失敗時に再試行、重複排除",
+            "zh": "编排摄取+刷新，sink 失败时重试，去重",
+            "pt": "Orquestra ingestão e descarga, repete em caso de falha do destino, deduplicação"
+          }
+        },
+        {
+          "name": "sink/",
+          "desc": {
+            "en": "Where flushed batches go",
+            "es": "Adónde van los lotes enviados",
+            "de": "Wohin die abgeschickten Batches gehen",
+            "fr": "Où vont les lots envoyés",
+            "it": "Dove vanno i batch inviati",
+            "ja": "送出したバッチの送り先 (HTTP 経由のデ",
+            "zh": "已刷新批次的去向 (经 HTTP 的数据湖或",
+            "pt": "Para onde vão os lotes enviados"
+          },
+          "tree_desc": {
+            "en": "Where flushed batches go (the data lake over HTTP, or the console), transport/invalid-data classification",
+            "es": "Adónde van los lotes enviados (el data lake por HTTP o la consola), clasificación de fallos de transporte y de datos inválidos",
+            "de": "Wohin die abgeschickten Batches gehen (der Data Lake über HTTP oder die Konsole), Klassifizierung von Transport- und Datenfehlern",
+            "fr": "Où vont les lots envoyés (le data lake en HTTP ou la console), classification des erreurs de transport et de données invalides",
+            "it": "Dove vanno i batch inviati (il data lake via HTTP o la console), classificazione degli errori di trasporto e dei dati non validi",
+            "ja": "送出したバッチの送り先 (HTTP 経由のデータレイクまたはコンソール)、転送エラーと不正データの分類",
+            "zh": "已刷新批次的去向 (经 HTTP 的数据湖或控制台),传输错误与无效数据的分类",
+            "pt": "Para onde vão os lotes enviados (o data lake por HTTP ou a consola), classificação de falhas de transporte e de dados inválidos"
+          }
+        },
+        {
+          "name": "spool/",
+          "desc": {
+            "en": "Optional on-disk queue that holds",
+            "es": "Cola opcional en disco que guarda las",
+            "de": "Optionale Warteschlange auf der Platte für",
+            "fr": "File optionnelle sur disque qui garde les",
+            "it": "Coda opzionale su disco che conserva i",
+            "ja": "送信先の長い障害中のサンプルを保持する任意の",
+            "zh": "可选的磁盘队列，保存目标长时间故障期间的样本",
+            "pt": "Fila opcional em disco que guarda as"
+          },
+          "tree_desc": {
+            "en": "Optional on-disk queue that holds the samples of a long sink outage",
+            "es": "Cola opcional en disco que guarda las muestras de una caída larga del destino",
+            "de": "Optionale Warteschlange auf der Platte für die Samples eines langen Ausfalls des Ziels",
+            "fr": "File optionnelle sur disque qui garde les échantillons d'une longue panne de la destination",
+            "it": "Coda opzionale su disco che conserva i campioni di una lunga interruzione della destinazione",
+            "ja": "送信先の長い障害中のサンプルを保持する任意のディスク上キュー",
+            "zh": "可选的磁盘队列，保存目标长时间故障期间的样本",
+            "pt": "Fila opcional em disco que guarda as amostras de uma falha longa do destino"
+          }
+        },
+        {
+          "name": "api/",
+          "desc": {
+            "en": "Plain JSON/HTTP handlers wrapping",
+            "es": "Handlers JSON/HTTP planos que envuelven el",
+            "de": "Einfache JSON/HTTP-Handler",
+            "fr": "Handlers JSON/HTTP simples encapsulant le",
+            "it": "Handler JSON/HTTP semplici che avvolgono il",
+            "ja": "collector を包む単純な JSON/",
+            "zh": "封装 collector 的简单 JSON/",
+            "pt": "Handlers JSON/HTTP simples que envolvem o"
+          },
+          "tree_desc": {
+            "en": "Plain JSON/HTTP handlers wrapping the collector",
+            "es": "Handlers JSON/HTTP planos que envuelven el collector",
+            "de": "Einfache JSON/HTTP-Handler, die den Collector umschließen",
+            "fr": "Handlers JSON/HTTP simples encapsulant le collecteur",
+            "it": "Handler JSON/HTTP semplici che avvolgono il collector",
+            "ja": "collector を包む単純な JSON/HTTP ハンドラー",
+            "zh": "封装 collector 的简单 JSON/HTTP 处理器",
+            "pt": "Handlers JSON/HTTP simples que envolvem o collector"
+          }
+        }
+      ],
+      "tree_head": {
+        "en": "Go module",
+        "es": "Módulo Go",
+        "de": "Go-Modul",
+        "fr": "Module Go",
+        "it": "Modulo Go",
+        "ja": "Go モジュール",
+        "zh": "Go 模块",
+        "pt": "Módulo Go"
+      },
+      "sub": {
+        "en": "Go module",
+        "es": "Módulo Go",
+        "de": "Go-Modul",
+        "fr": "Module Go",
+        "it": "Modulo Go",
+        "ja": "Go モジュール",
+        "zh": "Go 模块",
+        "pt": "Módulo Go"
+      },
+      "columns": 2
+    },
+    {
+      "name": {
+        "en": "folders",
+        "es": "carpetas",
+        "de": "Ordner",
+        "fr": "dossiers",
+        "it": "cartelle",
+        "ja": "フォルダ",
+        "zh": "文件夹",
+        "pt": "pastas"
+      },
+      "kind": "group",
+      "span": 3,
+      "accent": "b",
+      "columns": 2,
+      "rows": [
+        {
+          "name": "docs/",
+          "desc": {
+            "en": "documents of the project",
+            "es": "documentos del proyecto",
+            "de": "Dokumente des Projekts",
+            "fr": "documents du projet",
+            "it": "documenti del progetto",
+            "ja": "プロジェクトの文書",
+            "zh": "项目文档",
+            "pt": "documentos do projeto"
+          },
+          "tree_desc": {
+            "en": "documents of the project",
+            "es": "documentos del proyecto",
+            "de": "Dokumente des Projekts",
+            "fr": "documents du projet",
+            "it": "documenti del progetto",
+            "ja": "プロジェクトの文書",
+            "zh": "项目文档",
+            "pt": "documentos do projeto"
+          }
+        },
+        {
+          "name": "images/",
+          "desc": {
+            "en": "Media and diagrams",
+            "es": "Medios y diagramas",
+            "de": "Medien und Diagramme",
+            "fr": "Médias et diagrammes",
+            "it": "Media e diagrammi",
+            "ja": "メディアと図表",
+            "zh": "媒体与图表",
+            "pt": "Multimédia e diagramas"
+          },
+          "tree_desc": {
+            "en": "Media and diagrams",
+            "es": "Medios y diagramas",
+            "de": "Medien und Diagramme",
+            "fr": "Médias et diagrammes",
+            "it": "Media e diagrammi",
+            "ja": "メディアと図表",
+            "zh": "媒体与图表",
+            "pt": "Multimédia e diagramas"
+          }
+        },
+        {
+          "name": "systemd/",
+          "desc": {
+            "en": "service unit",
+            "es": "unidad de servicio",
+            "de": "Dienst-Unit",
+            "fr": "unité de service",
+            "it": "unità di servizio",
+            "ja": "サービスユニット",
+            "zh": "服务单元",
+            "pt": "unidade de serviço"
+          },
+          "tree_desc": {
+            "en": "service unit",
+            "es": "unidad de servicio",
+            "de": "Dienst-Unit",
+            "fr": "unité de service",
+            "it": "unità di servizio",
+            "ja": "サービスユニット",
+            "zh": "服务单元",
+            "pt": "unidade de serviço"
+          }
+        },
+        {
+          "name": "tools/",
+          "desc": {
+            "en": "project tools and CI checks",
+            "es": "herramientas del proyecto y comprobaciones",
+            "de": "Projektwerkzeuge und CI-Prüfungen",
+            "fr": "outils du projet et vérifications de la CI",
+            "it": "strumenti del progetto e controlli della CI",
+            "ja": "プロジェクトのツールと CI の検査",
+            "zh": "项目工具和 CI 检查",
+            "pt": "ferramentas do projeto e verificações da CI"
+          },
+          "tree_desc": {
+            "en": "project tools and CI checks",
+            "es": "herramientas del proyecto y comprobaciones del CI",
+            "de": "Projektwerkzeuge und CI-Prüfungen",
+            "fr": "outils du projet et vérifications de la CI",
+            "it": "strumenti del progetto e controlli della CI",
+            "ja": "プロジェクトのツールと CI の検査",
+            "zh": "项目工具和 CI 检查",
+            "pt": "ferramentas do projeto e verificações da CI"
+          }
+        },
+        {
+          "name": ".github/",
+          "desc": {
+            "en": "CI workflow and issue templates",
+            "es": "flujo de CI y plantillas de incidencias",
+            "de": "CI-Workflow und Issue-Vorlagen",
+            "fr": "workflow de CI et modèles de tickets",
+            "it": "workflow di CI e modelli di segnalazione",
+            "ja": "CI ワークフローと Issue テンプレート",
+            "zh": "CI 工作流和 Issue 模板",
+            "pt": "fluxo de CI e modelos de problemas"
+          }
+        }
+      ]
+    },
+    {
+      "name": {
+        "en": "project files",
+        "es": "ficheros del proyecto",
+        "de": "Projektdateien",
+        "fr": "fichiers du projet",
+        "it": "file del progetto",
+        "ja": "プロジェクトのファイル",
+        "zh": "项目文件",
+        "pt": "ficheiros do projeto"
+      },
+      "kind": "group",
+      "span": 3,
+      "accent": "c",
+      "columns": 2,
+      "rows": [
+        {
+          "name": "bump_version.py",
+          "desc": {
+            "en": "explicit version bump",
+            "es": "Incremento de versión tipo cuentakilómetros",
+            "de": "ausdrückliche Versionserhöhung",
+            "fr": "Incrément de version type compteur",
+            "it": "Incremento di versione stile contachilometri",
+            "ja": "明示的なバージョン更新",
+            "zh": "显式提升版本",
+            "pt": "Subida de versão ao estilo conta-quilómetros"
+          },
+          "tree_desc": {
+            "en": "explicit version bump",
+            "es": "Incremento de versión tipo cuentakilómetros (solo lo ejecuta el comando `bump` explícito)",
+            "de": "ausdrückliche Versionserhöhung",
+            "fr": "Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)",
+            "it": "Incremento di versione stile contachilometri (eseguito solo dal comando `bump` esplicito)",
+            "ja": "明示的なバージョン更新",
+            "zh": "显式提升版本",
+            "pt": "Subida de versão ao estilo conta-quilómetros (executada só pelo comando `bump` explícito)"
+          }
+        },
+        {
+          "name": "bump_manifest_version.py",
+          "desc": {
+            "en": "Syncs hydra-umc.project.json's version",
+            "es": "Sincroniza la versión de",
+            "de": "Synchronisiert die Version von",
+            "fr": "Synchronise la version de",
+            "it": "Sincronizza la versione di",
+            "ja": "hydra-umc.project.json",
+            "zh": "将 hydra-umc.project.js",
+            "pt": "Sincroniza a versão do"
+          },
+          "tree_desc": {
+            "en": "Syncs hydra-umc.project.json's version to the native one (--sync)",
+            "es": "Sincroniza la versión de hydra-umc.project.json con la nativa (--sync)",
+            "de": "Synchronisiert die Version von hydra-umc.project.json mit der nativen (--sync)",
+            "fr": "Synchronise la version de hydra-umc.project.json avec la version native (--sync)",
+            "it": "Sincronizza la versione di hydra-umc.project.json con quella nativa (--sync)",
+            "ja": "hydra-umc.project.json のバージョンをネイティブ版と同期(--sync)",
+            "zh": "将 hydra-umc.project.json 的版本与原生版本同步(--sync)",
+            "pt": "Sincroniza a versão do hydra-umc.project.json com a nativa (--sync)"
+          }
+        },
+        {
+          "name": "build.sh / build.bat",
+          "desc": {
+            "en": "Validate and build",
+            "es": "Valida y compila",
+            "de": "Validiert und baut",
+            "fr": "Valide et compile",
+            "it": "Valida e compila",
+            "ja": "検証してビルド（ビルドはバージョンを変更しな",
+            "zh": "验证并构建（构建不会更改版本）",
+            "pt": "Valida e compila"
+          },
+          "tree_desc": {
+            "en": "Validate and build (building never changes the version)",
+            "es": "Valida y compila (compilar nunca cambia la versión)",
+            "de": "Validiert und baut (Bauen ändert nie die Version)",
+            "fr": "Valide et compile (compiler ne change jamais la version)",
+            "it": "Valida e compila (compilare non cambia mai la versione)",
+            "ja": "検証してビルド（ビルドはバージョンを変更しない）",
+            "zh": "验证并构建（构建不会更改版本）",
+            "pt": "Valida e compila (compilar nunca altera a versão)"
+          }
+        },
+        {
+          "name": "run.sh / run.bat",
+          "desc": {
+            "en": "Real run: executes the compiled binary",
+            "es": "Ejecución real: corre el binario compilado",
+            "de": "Echte Ausführung",
+            "fr": "Exécution réelle : lance le binaire compilé",
+            "it": "Esecuzione reale: avvia il binario compilato",
+            "ja": "実際の実行：コンパイル済みバイナリを実行",
+            "zh": "真实运行：执行编译后的二进制文件",
+            "pt": "Execução real: executa o binário compilado"
+          },
+          "tree_desc": {
+            "en": "Real run: executes the compiled binary",
+            "es": "Ejecución real: corre el binario compilado",
+            "de": "Echte Ausführung: startet die kompilierte Binärdatei",
+            "fr": "Exécution réelle : lance le binaire compilé",
+            "it": "Esecuzione reale: avvia il binario compilato",
+            "ja": "実際の実行：コンパイル済みバイナリを実行",
+            "zh": "真实运行：执行编译后的二进制文件",
+            "pt": "Execução real: executa o binário compilado"
+          }
+        },
+        {
+          "name": "CHANGELOG.md",
+          "desc": {
+            "en": "what changed in each version",
+            "es": "qué cambió en cada versión",
+            "de": "was sich in jeder Version geändert hat",
+            "fr": "ce qui a changé à chaque version",
+            "it": "cosa è cambiato in ogni versione",
+            "ja": "各バージョンの変更点",
+            "zh": "每个版本的变更",
+            "pt": "o que mudou em cada versão"
+          }
+        },
+        {
+          "name": "build-test.sh",
+          "desc": {
+            "en": "non-mutating build check",
+            "es": "comprobación de compilación sin cambios",
+            "de": "Build-Prüfung ohne Änderungen",
+            "fr": "vérification de build sans modification",
+            "it": "controllo di build senza modifiche",
+            "ja": "変更を伴わないビルド確認",
+            "zh": "不修改内容的构建检查",
+            "pt": "verificação de compilação sem alterações"
+          }
+        },
+        {
+          "name": "hydra-umc.project.json",
+          "desc": {
+            "en": "manifest: version, maturity, family",
+            "es": "manifiesto: versión, madurez, familia",
+            "de": "Manifest: Version, Reifegrad, Familie",
+            "fr": "manifeste : version, maturité, famille",
+            "it": "manifesto: versione, maturità, famiglia",
+            "ja": "マニフェスト：バージョン、成熟度、ファミリー",
+            "zh": "清单：版本、成熟度、系列",
+            "pt": "manifesto: versão, maturidade, família"
+          }
+        },
+        {
+          "name": "test.sh",
+          "desc": {
+            "en": "runs the tests",
+            "es": "ejecuta las pruebas",
+            "de": "führt die Tests aus",
+            "fr": "lance les tests",
+            "it": "esegue i test",
+            "ja": "テストを実行",
+            "zh": "运行测试",
+            "pt": "executa os testes"
+          }
+        }
+      ]
+    }
+  ]
+}

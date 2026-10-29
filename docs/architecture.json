@@ -1,0 +1,173 @@
+{
+  "repo": "HYDRA-UMC-TELEMETRY-COLLECTOR",
+  "ecosystem": "hydra",
+  "tagline": "Telemetry in from three doors, deduplicated and bounded, out to the datalake in batches.",
+  "description": "HYDRA-UMC-TELEMETRY-COLLECTOR accepts CAN and WebSocket samples over HTTP and the MQTT state of the bridges, checks them, removes duplicates, buffers them with optional priorities and a disk spool, and flushes batches to HYDRA-UMC-DATALAKE.",
+  "columns": [
+    "WHO SENDS",
+    "THIS REPOSITORY",
+    "WHERE IT GOES"
+  ],
+  "nodes": [
+    {
+      "id": "can",
+      "column": 0,
+      "level": "tested",
+      "title": "CAN and WebSocket",
+      "lines": [
+        "POST /ingest/can and",
+        "POST /ingest/ws"
+      ],
+      "code": [
+        "src/api/api.go",
+        "src/telemetry/can.go",
+        "src/telemetry/ws.go"
+      ]
+    },
+    {
+      "id": "mq",
+      "column": 0,
+      "level": "tested",
+      "title": "MQTT broker",
+      "lines": [
+        "bridge state and",
+        "availability topics"
+      ],
+      "code": [
+        "src/mqttin/adapter.go",
+        "src/mqttin/client.go"
+      ]
+    },
+    {
+      "id": "dl",
+      "column": 2,
+      "level": "contract",
+      "title": "HYDRA-UMC-DATALAKE",
+      "lines": [
+        "POST /ingest/batch,",
+        "bearer token"
+      ]
+    },
+    {
+      "id": "sp",
+      "column": 2,
+      "level": "config",
+      "title": "Spool file",
+      "lines": [
+        "optional, size capped,",
+        "replayed first"
+      ]
+    },
+    {
+      "id": "smp",
+      "column": 1,
+      "level": "tested",
+      "title": "telemetry",
+      "lines": [
+        "sample shape, source id,",
+        "clock skew check"
+      ],
+      "code": [
+        "src/telemetry/sample.go"
+      ]
+    },
+    {
+      "id": "ded",
+      "column": 1,
+      "level": "tested",
+      "title": "dedup",
+      "lines": [
+        "drops what a reconnect",
+        "sends twice"
+      ],
+      "code": [
+        "src/dedup/dedup.go"
+      ]
+    },
+    {
+      "id": "col",
+      "column": 1,
+      "level": "tested",
+      "title": "collector + spool",
+      "lines": [
+        "flushes in batches; the",
+        "spool covers outages"
+      ],
+      "code": [
+        "src/collector/collector.go",
+        "src/spool/spool.go"
+      ]
+    },
+    {
+      "id": "buf",
+      "column": 1,
+      "level": "tested",
+      "title": "buffer",
+      "lines": [
+        "bounded ring with",
+        "optional priorities"
+      ],
+      "code": [
+        "src/buffer/ring.go"
+      ]
+    },
+    {
+      "id": "snk",
+      "column": 1,
+      "level": "tested",
+      "title": "sink",
+      "lines": [
+        "batch to the datalake or",
+        "to standard output"
+      ],
+      "code": [
+        "src/sink/sink.go",
+        "src/sink/datalake.go"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "can",
+      "to": "smp",
+      "level": "tested"
+    },
+    {
+      "from": "mq",
+      "to": "smp",
+      "level": "tested"
+    },
+    {
+      "from": "smp",
+      "to": "ded",
+      "level": "tested"
+    },
+    {
+      "from": "ded",
+      "to": "buf",
+      "level": "tested"
+    },
+    {
+      "from": "buf",
+      "to": "col",
+      "level": "tested"
+    },
+    {
+      "from": "col",
+      "to": "snk",
+      "level": "tested"
+    },
+    {
+      "from": "snk",
+      "to": "dl",
+      "level": "contract",
+      "label": "batches"
+    },
+    {
+      "from": "col",
+      "to": "sp",
+      "level": "config"
+    }
+  ],
+  "footer": "Tried on a computer against a local datalake and a local broker; no CAN adapter was connected."
+}
