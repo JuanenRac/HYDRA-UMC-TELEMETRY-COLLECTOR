@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.1.9] - Downsampling per kind, the vulnerability check of the Go libraries and staticcheck in the CI
+
 - **Downsampling per kind (`-downsample kind=intervalMs[:function]`):** the samples of a high-frequency kind are folded into one sample per time bucket and source (mean, min, max, last or sum of every field) before they are buffered, so a vibration or current read at 1 kHz does not fill the history with rows nobody looks at. It is off by default; a closed bucket is never lost when the buffer is full, the open buckets are delivered on shutdown, and `/stats` and `/metrics` count the folded samples, the buckets and the backlog.
 - **README in the universal layout:** the README and its seven translations follow the layout that the four families share (22 sections in a fixed order), with an architecture picture and a repository-structure picture drawn from `docs/architecture.json` and `docs/structure.json`; the CI validator checks both pictures and the file tree.
 
