@@ -14,11 +14,13 @@ package collector
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/dedup"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/downsample"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/spool"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
@@ -77,6 +79,13 @@ type Stats struct {
 	Spooled      int64
 	SpoolPending int
 	SpoolBytes   int64
+	// Downsampled counts samples folded into a bucket by a downsampling rule, Aggregates the buckets
+	// that left as one sample, and LateBuckets the samples that arrived for a bucket older than the open one.
+	Downsampled int64
+	Aggregates  int64
+	LateBuckets int64
+	// AggregateBacklog is how many closed buckets wait for room in the buffer.
+	AggregateBacklog int
 }
 
 type Collector struct {
@@ -98,6 +107,63 @@ type Collector struct {
 	maxFlushNanos     atomic.Int64
 
 	spool *spool.File
+
+	agg   *downsample.Aggregator
+	aggMu sync.Mutex
+}
+
+// aggregateGraceMs is how long after the end of a bucket Run closes it when no later sample arrived.
+const aggregateGraceMs = 2000
+
+// SetDownsample makes the kinds named by the rules arrive as one sample per time bucket (see package
+// downsample); nil keeps every sample. Call it before the collector runs.
+func (c *Collector) SetDownsample(rules map[string]downsample.Rule) {
+	if len(rules) == 0 {
+		c.agg = nil
+		return
+	}
+	c.agg = downsample.New(rules)
+}
+
+// accept puts a sample in the buffer, or folds it into its bucket when its kind is downsampled.
+func (c *Collector) accept(s telemetry.Sample) error {
+	if !c.agg.Handles(s.Kind) {
+		return c.buf.Push(s)
+	}
+	c.aggMu.Lock()
+	defer c.aggMu.Unlock()
+	if c.agg.Backlog() >= c.buf.Cap() {
+		return buffer.ErrFull
+	}
+	c.pushClosed(c.agg.Add(s))
+	return nil
+}
+
+// pushClosed moves closed buckets into the buffer, oldest first, and stops at the first refusal: what did not
+// fit stays pending in the aggregator. The caller holds aggMu.
+func (c *Collector) pushClosed(closed []telemetry.Sample) {
+	n := 0
+	for _, bucket := range closed {
+		if c.buf.Push(bucket) != nil {
+			break
+		}
+		n++
+	}
+	c.agg.Done(n)
+}
+
+// closeBuckets closes the buckets of producers that went quiet (all of them with drain) and buffers them.
+func (c *Collector) closeBuckets(drain bool) {
+	if c.agg == nil {
+		return
+	}
+	c.aggMu.Lock()
+	defer c.aggMu.Unlock()
+	if drain {
+		c.pushClosed(c.agg.Drain())
+		return
+	}
+	c.pushClosed(c.agg.Flush(time.Now().UnixMilli(), aggregateGraceMs))
 }
 
 // SetSpool makes a sink outage write the failed batches to the disk spool instead of keeping
@@ -204,7 +270,7 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 	// producer that doesn't send sequence numbers is never deduplicated,
 	// matching pre-dedup behavior exactly.
 	if s.Sequence == 0 {
-		if err := c.buf.Push(s); err != nil {
+		if err := c.accept(s); err != nil {
 			return err
 		}
 		c.ingested.Add(1)
@@ -218,7 +284,7 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 	// later retry, since dedup had already marked it "seen" regardless
 	// of whether it was ever really buffered).
 	allowed, err := c.dedup.AllowThen(s.SourceID, s.Sequence, func() error {
-		return c.buf.Push(s)
+		return c.accept(s)
 	})
 	if !allowed {
 		c.duplicates.Add(1)
@@ -363,8 +429,11 @@ func (c *Collector) Run(ctx context.Context, interval time.Duration, batchSize i
 	for {
 		select {
 		case <-ctx.Done():
+			c.closeBuckets(true)
+			c.FlushOnce(batchSize)
 			return
 		case <-ticker.C:
+			c.closeBuckets(false)
 			c.FlushOnce(batchSize)
 		}
 	}
@@ -382,7 +451,17 @@ func (c *Collector) Stats() Stats {
 	if c.spool != nil {
 		spoolPending, spoolBytes = c.spool.Pending(), c.spool.Bytes()
 	}
+	var folded, emitted, late int64
+	var backlog int
+	if c.agg != nil {
+		folded, emitted, late = c.agg.Counters()
+		backlog = c.agg.Backlog()
+	}
 	return Stats{
+		Downsampled:       folded,
+		Aggregates:        emitted,
+		LateBuckets:       late,
+		AggregateBacklog:  backlog,
 		Evicted:           int64(c.buf.Evicted()),
 		LastFlushMs:       c.lastFlushNanos.Load() / int64(time.Millisecond),
 		MaxFlushMs:        c.maxFlushNanos.Load() / int64(time.Millisecond),

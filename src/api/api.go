@@ -230,6 +230,10 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"inFlight":          stats.InFlight,
 		"bufferLen":         s.collector.BufferLen(),
 		"bufferCap":         s.collector.BufferCap(),
+		"downsampled":       stats.Downsampled,
+		"aggregates":        stats.Aggregates,
+		"lateBuckets":       stats.LateBuckets,
+		"aggregateBacklog":  stats.AggregateBacklog,
 	}
 	if s.opts.ExtraStats != nil {
 		for key, value := range s.opts.ExtraStats() {
@@ -297,6 +301,9 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		{prefix + "oldest_sample_age_milliseconds", "Age, by its own timestamp, of the sample that has waited longest in the buffer (0 when empty).", "gauge", stats.OldestSampleAgeMs},
 		{prefix + "in_flight", "Buffer slots held by a batch that is being delivered.", "gauge", int64(stats.InFlight)},
 		{prefix + "buffer_length", "Samples currently sitting in the ring buffer, waiting to be flushed.", "gauge", int64(s.collector.BufferLen())},
+		{prefix + "downsampled_total", "Samples folded into a bucket by a downsampling rule.", "counter", stats.Downsampled},
+		{prefix + "aggregates_total", "Buckets that left a downsampling rule as one sample.", "counter", stats.Aggregates},
+		{prefix + "aggregate_backlog", "Closed buckets waiting for room in the buffer.", "gauge", int64(stats.AggregateBacklog)},
 		{prefix + "buffer_capacity", "The ring buffer's own fixed maximum capacity.", "gauge", int64(s.collector.BufferCap())},
 	}
 

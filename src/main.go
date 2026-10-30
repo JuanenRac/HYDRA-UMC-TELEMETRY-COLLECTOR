@@ -32,6 +32,7 @@ import (
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/api"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/downsample"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/mqttin"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/spool"
@@ -59,6 +60,7 @@ func main() {
 	spoolMax := flag.Int64("spool-max-bytes", 256<<20, "most unsent bytes the -spool file may hold")
 	priority := flag.String("priority", "", "kind=level pairs (for example fault=9,motor_temp=5) that let a full buffer drop the least important queued sample for a more important one; empty keeps plain backpressure")
 	priorityDefault := flag.Int("priority-default", 0, "level of the kinds that -priority does not list")
+	downsampleRules := flag.String("downsample", "", "kind=intervalMs[:function] pairs (for example vibration=1000:max,motor_current=100) that fold the samples of a high-frequency kind into one per time bucket before they are buffered; the function is mean (default), min, max, last or sum; empty keeps every sample")
 	allowAnonymous := flag.Bool("allow-anonymous", false, "allow a non-loopback -addr with no token (the ingest routes are then open to the whole network)")
 	mqttURL := flag.String("mqtt-url", "", "broker to read the state of the bridges from (tcp://127.0.0.1:1883 or tls://host:8883); empty leaves the MQTT input off")
 	mqttTopics := flag.String("mqtt-topics", mqttin.StateTopic+","+mqttin.AvailabilityTopic, "comma-separated topic filters the MQTT input subscribes to")
@@ -81,6 +83,13 @@ func main() {
 	var priorityTable map[string]int
 	if problem == "" {
 		priorityTable, problem = parsePriority(*priority)
+	}
+	var downsampleTable map[string]downsample.Rule
+	if problem == "" {
+		var err error
+		if downsampleTable, err = downsample.ParseRules(*downsampleRules); err != nil {
+			problem = "-downsample: " + err.Error()
+		}
 	}
 	if problem != "" {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
@@ -127,6 +136,10 @@ func main() {
 	}
 	if priorityTable != nil {
 		c.SetPriority(buffer.PriorityByKind(priorityTable, *priorityDefault))
+	}
+	if downsampleTable != nil {
+		c.SetDownsample(downsampleTable)
+		fmt.Printf("[telemetry-collector] downsampling %d kind(s): %s\n", len(downsampleTable), *downsampleRules)
 	}
 	var mqttStats func() map[string]any
 	server := api.NewWithOptions(c, api.Options{Token: *token, MetricsToken: *metricsToken, ExtraStats: func() map[string]any {

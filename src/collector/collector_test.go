@@ -4,12 +4,14 @@
 package collector
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/downsample"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/telemetry"
 )
@@ -678,5 +680,97 @@ func TestCollector_IngestSampleChecksTheSampleLikeAnyOtherInput(t *testing.T) {
 	st := c.Stats()
 	if st.Ingested != 1 || st.IngestErrors != 1 || c.BufferLen() != 1 {
 		t.Fatalf("stats = %+v, buffer = %d", st, c.BufferLen())
+	}
+}
+
+func vibrationMessage(sourceID string, ts int64, value float64) []byte {
+	return []byte(fmt.Sprintf(`{"sourceId":%q,"kind":"vibration","timestamp":%d,"fields":{"rms":%v}}`, sourceID, ts, value))
+}
+
+func TestDownsampledKindArrivesAsOneSamplePerBucketAndOtherKindsAreUntouched(t *testing.T) {
+	m := &memorySink{}
+	c := New(100, m)
+	rules, err := downsample.ParseRules("vibration=1000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.SetDownsample(rules)
+	const base = int64(1_700_000_000_000)
+	for i := int64(0); i < 10; i++ {
+		if err := c.IngestWS(vibrationMessage("m1", base+i*100, float64(i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.IngestWS(vibrationMessage("m1", base+1000, 100)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.IngestWS(wsMessage("robot-1")); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.FlushOnce(100); got != 2 {
+		t.Fatalf("flushed %d, want the closed bucket and the motor_temp sample", got)
+	}
+	var vib *telemetry.Sample
+	for _, batch := range m.written {
+		for i := range batch {
+			if batch[i].Kind == "vibration" {
+				vib = &batch[i]
+			}
+		}
+	}
+	if vib == nil || vib.Timestamp != base || vib.Fields["rms"] != 4.5 {
+		t.Fatalf("aggregate = %+v", vib)
+	}
+	stats := c.Stats()
+	if stats.Downsampled != 11 || stats.Aggregates != 1 {
+		t.Fatalf("stats = %+v", stats)
+	}
+}
+
+func TestAClosedBucketIsNotLostWhenTheBufferIsFull(t *testing.T) {
+	m := &memorySink{}
+	c := New(1, m)
+	rules, _ := downsample.ParseRules("vibration=1000")
+	c.SetDownsample(rules)
+	const base = int64(1_700_000_000_000)
+	if err := c.IngestWS(wsMessage("robot-1")); err != nil { // fills the buffer
+		t.Fatal(err)
+	}
+	_ = c.IngestWS(vibrationMessage("m1", base, 1))
+	_ = c.IngestWS(vibrationMessage("m1", base+1000, 2)) // closes the first bucket, which cannot be buffered yet
+	if c.Stats().AggregateBacklog != 1 {
+		t.Fatalf("the closed bucket must wait, stats = %+v", c.Stats())
+	}
+	c.FlushOnce(10) // makes room
+	c.closeBuckets(false)
+	c.FlushOnce(10)
+	found := false
+	for _, batch := range m.written {
+		for _, s := range batch {
+			if s.Kind == "vibration" && s.Timestamp == base && s.Fields["rms"] == 1 {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("the bucket was lost: %+v", m.written)
+	}
+}
+
+func TestShuttingDownDeliversTheOpenBuckets(t *testing.T) {
+	m := &memorySink{}
+	c := New(10, m)
+	rules, _ := downsample.ParseRules("vibration=1000")
+	c.SetDownsample(rules)
+	if err := c.IngestWS(vibrationMessage("m1", 1_700_000_000_000, 3)); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { c.Run(ctx, time.Hour, 10); close(done) }()
+	cancel()
+	<-done
+	if len(m.written) != 1 || m.written[0][0].Fields["rms"] != 3 {
+		t.Fatalf("written = %+v", m.written)
 	}
 }
