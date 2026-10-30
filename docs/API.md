@@ -125,6 +125,7 @@ A producer that **restarts** begins its counter again, far behind everything it 
 - `lastFlushMs` / `maxFlushMs` - how long the last and the slowest delivery of a batch to the sink took.
 - `oldestSampleAgeMs` - age, by its own `timestamp`, of the sample that has waited longest in the buffer (`0` when it is empty).
 - `spooled` / `spoolPending` / `spoolBytes` - samples written to the disk spool, and what it still holds (all `0` without `-spool`).
+- `downsampled` / `aggregates` / `lateBuckets` / `aggregateBacklog` - samples folded into a bucket, buckets that left as one sample, samples that arrived for an older bucket than the open one, and closed buckets waiting for room in the buffer (all `0` without `-downsample`).
 
 ## Optional protections and queues (all off by default)
 
@@ -132,6 +133,7 @@ A producer that **restarts** begins its counter again, far behind everything it 
 |---|---|
 | `-spool <file>` | A sink failure writes the batch to this file (one JSON line per sample) instead of keeping it in memory, so the buffer keeps accepting samples during a long outage. When the sink answers again the spool is replayed before anything newer. Bounded by `-spool-max-bytes` (default 256 MiB); a full spool falls back to keeping the batch in memory. What a previous run left in the file is replayed at start. Delivery is at least once: after a crash a batch can be delivered twice, and HYDRA-UMC-DATALAKE stores a point once per `(source, kind, field, timestamp)`. |
 | `-priority kind=level,...` and `-priority-default <n>` | A full buffer drops the least important queued sample (the oldest among equals) to take a more important one; without it a full buffer refuses new samples with `503`. Dropped ones are counted in `evicted`. |
+| `-downsample kind=intervalMs[:function],...` | Folds the samples of a high-frequency kind (for example `vibration=1000:max`) into ONE sample per time bucket of that many milliseconds, per source, before they are buffered. The function is `mean` (default), `min`, `max`, `last` or `sum`, applied to every field; the sample that leaves carries the start of the bucket as its `timestamp`. A bucket closes when a later sample of the same source and kind arrives, or two seconds after its end when the producer went quiet, and every open bucket is delivered on shutdown. A closed bucket that finds the buffer full waits (`aggregateBacklog`) and new samples of that kind are refused with `503` once the backlog reaches the buffer capacity. A sample that arrives for a bucket older than the open one leaves as a bucket of its own (`lateBuckets`). Kinds that are not listed are untouched. |
 | `-datalake-permanent-statuses 401,403,404` | HTTP client errors (400-499) from the datalake that discard the sample (it is counted as `quarantined`) instead of waiting for the configuration to be fixed. Default empty: they wait. |
 | `-metrics-token` | Makes `GET /stats` and `GET /metrics` require a bearer token. |
 
