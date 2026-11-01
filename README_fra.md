@@ -38,7 +38,7 @@ GPL-3.0-or-later - see LICENSE
 | Tests | 138 (`go test ./...`) |
 | Technologie | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | Cible | Le Raspberry Pi CM5 d'une cellule HYDRA-UMC |
-| Sur matériel réel | Pas encore : aucune exécution sur du matériel réel n'est consignée pour cette version |
+| Sur matériel réel | Sans objet : rien ici ne s'exécute sur du matériel |
 
 **Aller à :** [Présentation](#-présentation) · [Architecture](#-architecture) · [Sécurité et protection](#-sécurité-et-protection) · [Configuration](#-configuration) · [Démarrage rapide](#-démarrage-rapide) · [Tests](#-tests) · [Dépannage](#-dépannage) · [Structure du dépôt](#-structure-du-dépôt) · [Projets liés](#-projets-liés)
 
@@ -52,7 +52,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 |---|---|---|
 | Logiciel | 🟡 | Fonctionne pour son usage principal ; la vérification d'honnêteté ci-dessus liste ce qui manque encore |
 | Tests | 🟢 | 138 tests automatiques, exécutés à chaque modification |
-| Matériel réel | 🔴 | Pas encore : aucune exécution sur du matériel réel n'est consignée pour cette version |
+| Matériel réel | 🟢 | Sans objet : rien ici ne s'exécute sur du matériel |
 | Documentation | 🟢 | README en huit langues, vérifié par rapport au manifeste à chaque modification |
 
 ## 🎯 Présentation
