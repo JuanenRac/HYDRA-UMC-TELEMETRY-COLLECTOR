@@ -12,7 +12,7 @@ fi
 # Author    : JuanenRac (Electro Hobby 3D)
 # Email     : electrohobby3d@gmail.com
 # Copyright : (C) 2026 JuanenRac
-# License   : GPL-3.0 - see LICENSE
+# License   : GPL-3.0-or-later - see LICENSE
 # *****************************************************************************
 # HYDRA_UMC_SCRIPT_STANDARD_HEADER_END
 # HYDRA_UMC_SCRIPT_STANDARD_BANNER_BEGIN
@@ -22,7 +22,7 @@ printf '%s\n' "* Mode      : INCREMENTAL BUILD"
 printf '%s\n' "* Author    : JuanenRac (Electro Hobby 3D)"
 printf '%s\n' "* Email     : electrohobby3d@gmail.com"
 printf '%s\n' "* Copyright : (C) 2026 JuanenRac"
-printf '%s\n' "* License   : GPL-3.0 - see LICENSE"
+printf '%s\n' "* License   : GPL-3.0-or-later - see LICENSE"
 printf '%s\n' "* ------------------------------------------------------------------------- *"
 printf '%s\n' "* 1. Read the project version (building never changes it; use the explicit bump command)."
 printf '%s\n' "* 2. Run this project's declared build, verification and packaging commands."
