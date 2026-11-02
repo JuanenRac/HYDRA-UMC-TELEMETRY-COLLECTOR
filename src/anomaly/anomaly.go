@@ -34,15 +34,30 @@ import (
 // MaxWindow is the longest window a rule may ask for.
 const MaxWindow = 65536
 
-// Rule selects one field of one kind and the length of the window sent to the detector.
+// MaxOverlap is the largest share of a window, in percent, that the next window may repeat.
+const MaxOverlap = 90
+
+// Rule selects one field of one kind, the length of the window sent to the detector and how
+// much of it the next window repeats (Overlap, in percent; 0 means windows that do not overlap).
 type Rule struct {
-	Kind   string
-	Field  string
-	Window int
+	Kind    string
+	Field   string
+	Window  int
+	Overlap int
 }
 
-// ParseRules reads "kind/field=window" pairs separated by commas. The empty string is no rules.
-func ParseRules(spec string) ([]Rule, error) {
+// keep is how many of the newest values of a sent window open the next one.
+func (r Rule) keep() int { return r.Window * r.Overlap / 100 }
+
+// ParseRules reads "kind/field=window" or "kind/field=window@overlap" pairs separated by commas;
+// the overlap is a percentage from 0 to 90. The empty string is no rules.
+func ParseRules(spec string) ([]Rule, error) { return ParseRulesOverlap(spec, 0) }
+
+// ParseRulesOverlap is ParseRules where a rule without its own "@overlap" uses defaultOverlap.
+func ParseRulesOverlap(spec string, defaultOverlap int) ([]Rule, error) {
+	if defaultOverlap < 0 || defaultOverlap > MaxOverlap {
+		return nil, fmt.Errorf("the overlap must be a whole number of percent from 0 to %d", MaxOverlap)
+	}
 	var rules []Rule
 	seen := map[string]bool{}
 	for _, part := range strings.Split(spec, ",") {
@@ -55,6 +70,14 @@ func ParseRules(spec string) ([]Rule, error) {
 		if !ok || !ok2 || kind == "" || field == "" {
 			return nil, fmt.Errorf("%q must look like kind/field=window", part)
 		}
+		overlap := defaultOverlap
+		if sizeOnly, share, has := strings.Cut(size, "@"); has {
+			size = sizeOnly
+			var oerr error
+			if overlap, oerr = strconv.Atoi(strings.TrimSpace(share)); oerr != nil || overlap < 0 || overlap > MaxOverlap {
+				return nil, fmt.Errorf("%q: the overlap must be a whole number of percent from 0 to %d", part, MaxOverlap)
+			}
+		}
 		window, err := strconv.Atoi(strings.TrimSpace(size))
 		if err != nil || window < 2 || window > MaxWindow {
 			return nil, fmt.Errorf("%q: the window must be a whole number from 2 to %d", part, MaxWindow)
@@ -63,7 +86,7 @@ func ParseRules(spec string) ([]Rule, error) {
 			return nil, fmt.Errorf("%q is listed twice", name)
 		}
 		seen[name] = true
-		rules = append(rules, Rule{Kind: kind, Field: field, Window: window})
+		rules = append(rules, Rule{Kind: kind, Field: field, Window: window, Overlap: overlap})
 	}
 	return rules, nil
 }
@@ -89,7 +112,7 @@ type job struct {
 // Publisher collects windows and sends them to the detector.
 type Publisher struct {
 	opts  Options
-	rules map[[2]string]int
+	rules map[[2]string]Rule
 	queue chan job
 
 	mu     sync.Mutex
@@ -124,9 +147,9 @@ func New(o Options) *Publisher {
 		o.Client = &http.Client{Timeout: o.Timeout}
 	}
 	o.URL = strings.TrimRight(o.URL, "/")
-	p := &Publisher{opts: o, rules: map[[2]string]int{}, queue: make(chan job, o.QueueMax), series: map[seriesKey][]float64{}}
+	p := &Publisher{opts: o, rules: map[[2]string]Rule{}, queue: make(chan job, o.QueueMax), series: map[seriesKey][]float64{}}
 	for _, r := range o.Rules {
-		p.rules[[2]string{r.Kind, r.Field}] = r.Window
+		p.rules[[2]string{r.Kind, r.Field}] = r
 	}
 	return p
 }
@@ -137,7 +160,7 @@ func (p *Publisher) Offer(batch []telemetry.Sample) {
 	defer p.mu.Unlock()
 	for _, s := range batch {
 		for field, value := range s.Fields {
-			window, ok := p.rules[[2]string{s.Kind, field}]
+			rule, ok := p.rules[[2]string{s.Kind, field}]
 			if !ok {
 				continue
 			}
@@ -148,11 +171,15 @@ func (p *Publisher) Offer(batch []telemetry.Sample) {
 				continue
 			}
 			values = append(values, value)
-			if len(values) < window {
+			if len(values) < rule.Window {
 				p.series[key] = values
 				continue
 			}
-			p.series[key] = make([]float64, 0, window)
+			// the sent window is its own slice; the newest values of it open the next one, so a
+			// sample is stored once and the series never holds more than one window
+			next := make([]float64, 0, rule.Window)
+			next = append(next, values[len(values)-rule.keep():]...)
+			p.series[key] = next
 			p.stats.Windows++
 			select {
 			case p.queue <- job{key, values}:

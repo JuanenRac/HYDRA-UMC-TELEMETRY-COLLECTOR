@@ -72,6 +72,7 @@ func main() {
 	mqttMaxAge := flag.Duration("mqtt-max-age", mqttin.DefaultMaxAge, "oldest retained state that still counts as a reading")
 	anomalyURL := flag.String("anomaly-url", "", "HYDRA-UMC-ANOMALY-DETECTOR base URL to stream windows of the delivered samples to (with -anomaly-rules); empty leaves the stream off")
 	anomalyRules := flag.String("anomaly-rules", "", "kind/field=window pairs (for example vibration/accel=1024) naming the signals whose windows are sent to the detector; empty leaves the stream off")
+	anomalyOverlap := flag.Int("anomaly-overlap", 0, "percent of each window that the next one repeats (0 to 90) for the rules that do not give their own kind/field=window@percent; 0 sends windows that do not overlap")
 	anomalyToken := flag.String("anomaly-token", os.Getenv(anomalyTokenEnv), "bearer token sent to the detector (default: $"+anomalyTokenEnv+")")
 	anomalyQueue := flag.Int("anomaly-queue", 64, "windows that may wait to be sent to the detector; a full queue drops the new window")
 	anomalyMaxSeries := flag.Int("anomaly-max-series", 64, "most distinct (source, kind, field) signals the stream keeps a window for")
@@ -101,7 +102,7 @@ func main() {
 	var anomalyTable []anomaly.Rule
 	if problem == "" {
 		var err error
-		if anomalyTable, err = anomaly.ParseRules(*anomalyRules); err != nil {
+		if anomalyTable, err = anomaly.ParseRulesOverlap(*anomalyRules, *anomalyOverlap); err != nil {
 			problem = "-anomaly-rules: " + err.Error()
 		} else {
 			problem = anomalyProblem(*anomalyURL, *anomalyToken, len(anomalyTable), *anomalyQueue, *anomalyMaxSeries, *anomalyPlain)

@@ -162,3 +162,115 @@ func TestTeeOffersOnlyWhatTheSinkConfirmed(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+func drain(p *Publisher) [][]float64 {
+	var out [][]float64
+	for {
+		select {
+		case j := <-p.queue:
+			out = append(out, j.window)
+		default:
+			return out
+		}
+	}
+}
+
+func seq(from, to int) []float64 {
+	var out []float64
+	for i := from; i <= to; i++ {
+		out = append(out, float64(i))
+	}
+	return out
+}
+
+func TestParseRulesOverlap(t *testing.T) {
+	rules, err := ParseRulesOverlap("vibration/accel=8@50, motor_current/i=8", 25)
+	if err != nil || rules[0].Overlap != 50 || rules[1].Overlap != 25 {
+		t.Fatalf("got %v %v", rules, err)
+	}
+	if r, _ := ParseRules("a/b=4"); r[0].Overlap != 0 {
+		t.Fatalf("default overlap must be 0: %v", r)
+	}
+	for _, bad := range []string{"a/b=4@91", "a/b=4@-1", "a/b=4@x", "a/b=4@"} {
+		if _, err := ParseRules(bad); err == nil {
+			t.Errorf("%q should be refused", bad)
+		}
+	}
+	if _, err := ParseRulesOverlap("a/b=4", 91); err == nil {
+		t.Error("a default overlap above 90 should be refused")
+	}
+	if r, err := ParseRules("a/b=4@90"); err != nil || r[0].Overlap != 90 {
+		t.Errorf("90 is allowed: %v %v", r, err)
+	}
+}
+
+func TestNoOverlapIsTheOldBehaviour(t *testing.T) {
+	p := New(Options{URL: "http://x", Rules: []Rule{{Kind: "vibration", Field: "accel", Window: 4}}})
+	p.Offer(vib("r", seq(1, 9)...))
+	got := drain(p)
+	if len(got) != 2 || len(got[0]) != 4 || got[0][0] != 1 || got[1][0] != 5 || got[1][3] != 8 {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestOverlapHalfSlidesTheWindow(t *testing.T) {
+	p := New(Options{URL: "http://x", Rules: []Rule{{Kind: "vibration", Field: "accel", Window: 4, Overlap: 50}}})
+	p.Offer(vib("r", seq(1, 8)...))
+	got := drain(p)
+	// windows 1-4, 3-6, 5-8: every sample stored once, only the hop of new values per window
+	if len(got) != 3 || got[0][0] != 1 || got[1][0] != 3 || got[2][0] != 5 || got[2][3] != 8 {
+		t.Fatalf("got %v", got)
+	}
+	if p.Counters().Windows != 3 {
+		t.Fatalf("windows %d", p.Counters().Windows)
+	}
+}
+
+func TestOverlapLimitsAndBoundedSeries(t *testing.T) {
+	p := New(Options{URL: "http://x", QueueMax: 100000, Rules: []Rule{{Kind: "vibration", Field: "accel", Window: 2, Overlap: 90}}})
+	p.Offer(vib("r", seq(1, 20)...))
+	got := drain(p)
+	// 90% of 2 values keeps 1: a hop of one value, so 19 windows
+	if len(got) != 19 || got[18][1] != 20 {
+		t.Fatalf("got %d windows", len(got))
+	}
+	big := New(Options{URL: "http://x", Rules: []Rule{{Kind: "vibration", Field: "accel", Window: 100, Overlap: 90}}})
+	for i := 0; i < 50; i++ {
+		big.Offer(vib("r", seq(1, 37)...))
+		drain(big)
+		for _, v := range big.series {
+			if len(v) >= 100 {
+				t.Fatalf("series grew: len %d", len(v))
+			}
+		}
+	}
+}
+
+func TestOverlapDoesNotResendConfirmedSamples(t *testing.T) {
+	// the sink confirms 3 of 6: only those are offered; the retry offers the other 3 once
+	p := New(Options{URL: "http://x", Rules: []Rule{{Kind: "vibration", Field: "accel", Window: 4, Overlap: 50}}})
+	batch := vib("r", seq(1, 6)...)
+	tee := Tee{Primary: fakeSink{&sink.PartialWriteError{Err: errors.New("half"), Succeeded: 3}}, Pub: p}
+	if err := tee.Write(batch); err == nil {
+		t.Fatal("expected the partial error")
+	}
+	if len(drain(p)) != 0 {
+		t.Fatal("3 samples cannot fill a window of 4")
+	}
+	tee.Primary = fakeSink{}
+	if err := tee.Write(batch[3:]); err != nil {
+		t.Fatal(err)
+	}
+	got := drain(p)
+	if len(got) != 2 || got[0][0] != 1 || got[0][3] != 4 || got[1][0] != 3 || got[1][3] != 6 {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestOverlapQueueStaysBounded(t *testing.T) {
+	p := New(Options{URL: "http://x", QueueMax: 3, Rules: []Rule{{Kind: "vibration", Field: "accel", Window: 4, Overlap: 75}}})
+	p.Offer(vib("r", seq(1, 400)...))
+	if len(p.queue) != 3 || p.Counters().DroppedQueue == 0 {
+		t.Fatalf("queue %d dropped %d", len(p.queue), p.Counters().DroppedQueue)
+	}
+}
