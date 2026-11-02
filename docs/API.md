@@ -137,6 +137,17 @@ A producer that **restarts** begins its counter again, far behind everything it 
 | `-datalake-permanent-statuses 401,403,404` | HTTP client errors (400-499) from the datalake that discard the sample (it is counted as `quarantined`) instead of waiting for the configuration to be fixed. Default empty: they wait. |
 | `-metrics-token` | Makes `GET /stats` and `GET /metrics` require a bearer token. |
 
+## Stream to the anomaly detector (all off by default)
+
+| Flag | What it does |
+|---|---|
+| `-anomaly-url <url>` and `-anomaly-rules kind/field=window,...` | After the datalake (or the console) has confirmed a batch, the values of each listed field are collected per source and every full window of that many values is sent to `POST /detectors/{sourceId}/{kind}/{field}/detect` of HYDRA-UMC-ANOMALY-DETECTOR (the detector of that series must have been fitted; a `409` is counted as `notFitted`). Both flags go together; the window is 2 to 65536 values. Windows do not overlap. After a partial delivery only the confirmed samples are offered, so a retried sample is not counted twice. |
+| `-anomaly-token`, `$HYDRA_UMC_ANOMALY_TOKEN` | Bearer token sent to the detector. Over plain `http` to a host that is not on this machine it is refused unless `-anomaly-allow-plaintext` is given. |
+| `-anomaly-queue <n>` | Windows that may wait to be sent (default 64); a full queue drops the new window (`droppedQueue`). |
+| `-anomaly-max-series <n>` | Most distinct (source, kind, field) signals kept (default 64); a further one is ignored (`droppedSeries`). |
+
+The stream is best effort: it never blocks, retries or fails the delivery to the datalake. `GET /stats` adds `anomaly.counters` (`windows`, `sent`, `anomalous`, `notFitted`, `errors`, `droppedQueue`, `droppedSeries`, `lastScore`), `anomaly.queued` and `anomaly.series`.
+
 ---
 
 ## Errors

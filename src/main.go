@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/anomaly"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/api"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
@@ -69,6 +70,12 @@ func main() {
 	mqttCA := flag.String("mqtt-ca-file", "", "PEM file of the authority that signed the broker certificate (tls:// only)")
 	mqttPlain := flag.Bool("mqtt-allow-plaintext", false, "allow credentials over a plain connection to a broker that is not on this machine")
 	mqttMaxAge := flag.Duration("mqtt-max-age", mqttin.DefaultMaxAge, "oldest retained state that still counts as a reading")
+	anomalyURL := flag.String("anomaly-url", "", "HYDRA-UMC-ANOMALY-DETECTOR base URL to stream windows of the delivered samples to (with -anomaly-rules); empty leaves the stream off")
+	anomalyRules := flag.String("anomaly-rules", "", "kind/field=window pairs (for example vibration/accel=1024) naming the signals whose windows are sent to the detector; empty leaves the stream off")
+	anomalyToken := flag.String("anomaly-token", os.Getenv(anomalyTokenEnv), "bearer token sent to the detector (default: $"+anomalyTokenEnv+")")
+	anomalyQueue := flag.Int("anomaly-queue", 64, "windows that may wait to be sent to the detector; a full queue drops the new window")
+	anomalyMaxSeries := flag.Int("anomaly-max-series", 64, "most distinct (source, kind, field) signals the stream keeps a window for")
+	anomalyPlain := flag.Bool("anomaly-allow-plaintext", false, "allow the detector token over plain http to a host that is not on this machine")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
 
@@ -89,6 +96,15 @@ func main() {
 		var err error
 		if downsampleTable, err = downsample.ParseRules(*downsampleRules); err != nil {
 			problem = "-downsample: " + err.Error()
+		}
+	}
+	var anomalyTable []anomaly.Rule
+	if problem == "" {
+		var err error
+		if anomalyTable, err = anomaly.ParseRules(*anomalyRules); err != nil {
+			problem = "-anomaly-rules: " + err.Error()
+		} else {
+			problem = anomalyProblem(*anomalyURL, *anomalyToken, len(anomalyTable), *anomalyQueue, *anomalyMaxSeries, *anomalyPlain)
 		}
 	}
 	if problem != "" {
@@ -124,6 +140,12 @@ func main() {
 		fmt.Println("[telemetry-collector] no -datalake-url given, printing flushed samples to stdout")
 	}
 
+	var anomalyPub *anomaly.Publisher
+	if len(anomalyTable) > 0 {
+		anomalyPub = anomaly.New(anomaly.Options{URL: *anomalyURL, Token: *anomalyToken, Rules: anomalyTable, QueueMax: *anomalyQueue, MaxSeries: *anomalyMaxSeries})
+		s = anomaly.Tee{Primary: s, Pub: anomalyPub}
+		fmt.Printf("[telemetry-collector] streaming %d signal(s) to the anomaly detector at %s\n", len(anomalyTable), *anomalyURL)
+	}
 	c := collector.New(*bufferCap, s)
 	if *spoolPath != "" {
 		sp, err := spool.Open(*spoolPath, *spoolMax)
@@ -143,16 +165,30 @@ func main() {
 	}
 	var mqttStats func() map[string]any
 	server := api.NewWithOptions(c, api.Options{Token: *token, MetricsToken: *metricsToken, ExtraStats: func() map[string]any {
-		if mqttStats == nil {
+		extra := map[string]any{}
+		if mqttStats != nil {
+			for key, value := range mqttStats() {
+				extra[key] = value
+			}
+		}
+		if anomalyPub != nil {
+			for key, value := range anomalyPub.Stats() {
+				extra[key] = value
+			}
+		}
+		if len(extra) == 0 {
 			return nil
 		}
-		return mqttStats()
+		return extra
 	}})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go c.Run(ctx, *flushInterval, *batchSize)
+	if anomalyPub != nil {
+		go anomalyPub.Run(ctx)
+	}
 
 	if *mqttURL != "" {
 		password := os.Getenv(mqttPasswordEnv)

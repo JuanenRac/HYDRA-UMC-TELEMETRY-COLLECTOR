@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Stream to the anomaly detector (off by default):** `-anomaly-url` with `-anomaly-rules kind/field=window` (for example `vibration/accel=1024`) collects the values of that field per source and sends every full window to `POST /detectors/{sourceId}/{kind}/{field}/detect` of HYDRA-UMC-ANOMALY-DETECTOR as soon as the datalake has confirmed the samples (after a partial delivery only the confirmed ones), besides the batch path. It is best effort and never holds up the delivery: a bounded queue (`-anomaly-queue`) drops the new window when full, at most `-anomaly-max-series` signals are tracked, and an unreachable detector or a series without a baseline only raises a counter. The token comes from `-anomaly-token` or the environment and is not sent in the clear to another machine unless `-anomaly-allow-plaintext` is given. `GET /stats` reports `anomaly` (windows, sent, anomalous, notFitted, errors, dropped, last score).
+
 ## [0.1.9] - Downsampling per kind, the vulnerability check of the Go libraries and staticcheck in the CI
 
 - **Downsampling per kind (`-downsample kind=intervalMs[:function]`):** the samples of a high-frequency kind are folded into one sample per time bucket and source (mean, min, max, last or sum of every field) before they are buffered, so a vibration or current read at 1 kHz does not fill the history with rows nobody looks at. It is off by default; a closed bucket is never lost when the buffer is full, the open buckets are delivered on shutdown, and `/stats` and `/metrics` count the folded samples, the buckets and the backlog.

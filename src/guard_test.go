@@ -132,3 +132,29 @@ func TestMqttProblemRefusesPlaintextCredentialsToAnotherMachine(t *testing.T) {
 		}
 	}
 }
+
+func TestAnomalyProblem(t *testing.T) {
+	cases := []struct {
+		name          string
+		url, token    string
+		rules, q, max int
+		plain         bool
+		wantProblem   bool
+	}{
+		{"off", "", "", 0, 64, 64, false, false},
+		{"loopback with token", "http://127.0.0.1:8097", "a-token-of-16-chars", 1, 64, 64, false, false},
+		{"url without rules", "http://127.0.0.1:8097", "", 0, 64, 64, false, true},
+		{"rules without url", "", "", 1, 64, 64, false, true},
+		{"not an http address", "ftp://x:1", "", 1, 64, 64, false, true},
+		{"zero queue", "http://127.0.0.1:8097", "", 1, 0, 64, false, true},
+		{"token in the clear to another host", "http://10.0.0.5:8097", "a-token-of-16-chars", 1, 64, 64, false, true},
+		{"token in the clear allowed", "http://10.0.0.5:8097", "a-token-of-16-chars", 1, 64, 64, true, false},
+		{"token over https", "https://10.0.0.5:8097", "a-token-of-16-chars", 1, 64, 64, false, false},
+	}
+	for _, c := range cases {
+		got := anomalyProblem(c.url, c.token, c.rules, c.q, c.max, c.plain)
+		if (got != "") != c.wantProblem {
+			t.Errorf("%s: got %q", c.name, got)
+		}
+	}
+}

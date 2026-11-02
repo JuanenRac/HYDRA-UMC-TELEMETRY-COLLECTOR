@@ -69,6 +69,9 @@ const tokenEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN"
 // datalakeTokenEnv supplies the bearer token sent to HYDRA-UMC-DATALAKE.
 const datalakeTokenEnv = "HYDRA_UMC_DATALAKE_TOKEN"
 
+// anomalyTokenEnv supplies the bearer token sent to HYDRA-UMC-ANOMALY-DETECTOR.
+const anomalyTokenEnv = "HYDRA_UMC_ANOMALY_TOKEN"
+
 // minTokenLength is the shortest bearer token accepted; shorter ones are
 // guessable, so they are refused instead of silently weakening the check.
 const minTokenLength = 16
@@ -149,6 +152,29 @@ func mqttProblem(rawURL, username string, allowPlaintext bool) string {
 	}
 	if !allowPlaintext {
 		return "refusing to talk MQTT in the clear to " + host + ": use tls:// (with -mqtt-ca-file for a private authority) or pass -mqtt-allow-plaintext on a network you trust"
+	}
+	return ""
+}
+
+// anomalyProblem returns why the stream to the anomaly detector cannot be used, or "" when it
+// is fine (or off). The stream needs both the address and at least one rule, and a token is
+// not sent in the clear to another machine unless that was asked for.
+func anomalyProblem(rawURL, token string, rules, queue, maxSeries int, allowPlaintext bool) string {
+	if rawURL == "" && rules == 0 {
+		return ""
+	}
+	if rawURL == "" || rules == 0 {
+		return "-anomaly-url and -anomaly-rules go together: the stream needs an address and at least one signal"
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "-anomaly-url must look like http://127.0.0.1:8097 or https://host:8097"
+	}
+	if queue < 1 || maxSeries < 1 {
+		return "-anomaly-queue and -anomaly-max-series must be at least 1"
+	}
+	if token != "" && u.Scheme == "http" && !allowPlaintext && !isLoopbackAddr(u.Host) {
+		return "refusing to send the detector token over plain http to " + u.Host + ": use https or pass -anomaly-allow-plaintext"
 	}
 	return ""
 }
