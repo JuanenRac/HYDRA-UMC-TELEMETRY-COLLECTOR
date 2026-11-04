@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A uniform `GET /health`, closed by default, and the manifest declares it:** `-health-open` (or `HYDRA_UMC_TELEMETRY_COLLECTOR_HEALTH_OPEN=1`) makes the collector answer `GET /health` with `{"status": "ok", "service": ..., "version": ...}`, the same body in every service of the family; without the switch the route answers `404` like a route that does not exist. A caller that is not on loopback must present the ingest token or the metrics token (`401` otherwise), the body carries no path, configuration or secret, and `service.health_path` of the manifest is `/health` now (the health checks ask `/stats` after a `404`). 4 tests.
+
 - **Compressed batches towards the datalake (off by default, `-datalake-gzip`):** each `POST /ingest/batch` goes with `Content-Encoding: gzip`, which saves bandwidth on a slow link. The datalake reads compressed bodies only when it runs with `--accept-gzip`; against one that does not, the first compressed batch is answered `400`, the collector repeats it plain, remembers it and keeps sending plain bodies, so no batch is lost. 2 tests.
 
 ## [0.2.0] - The collector can stream windows of a field to the anomaly detector, with optional overlapping windows, both off by default

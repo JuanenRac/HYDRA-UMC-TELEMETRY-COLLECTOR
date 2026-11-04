@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -65,6 +66,18 @@ func parsePriority(list string) (map[string]int, string) {
 
 // tokenEnv is the environment variable that supplies the ingest bearer token.
 const tokenEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN"
+
+// healthOpenEnv is the environment variable that opens GET /health (1, true, yes or on).
+const healthOpenEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_HEALTH_OPEN"
+
+// healthOpenFromEnv reads healthOpenEnv; anything but a true word keeps the route closed.
+func healthOpenFromEnv() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(healthOpenEnv))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
 
 // datalakeTokenEnv supplies the bearer token sent to HYDRA-UMC-DATALAKE.
 const datalakeTokenEnv = "HYDRA_UMC_DATALAKE_TOKEN"

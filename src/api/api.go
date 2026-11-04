@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 
@@ -42,6 +43,13 @@ type Options struct {
 	// /stats and /metrics too (it may differ from Token, so a scraper needs no write
 	// access). Empty keeps the two routes open.
 	MetricsToken string
+	// HealthOpen opens GET /health. Closed (the default), the route answers 404 like a route that does not exist. Open, it answers 200 to a
+	// caller on loopback; any other caller must present the ingest token or the metrics token (401 otherwise), and a collector with
+	// no token never answers a caller that is not on loopback.
+	HealthOpen bool
+	// Service and Version name the collector in the body of GET /health.
+	Service string
+	Version string
 	// ExtraStats, when set, adds its keys to the answer of /stats (the state of the optional inputs of the process).
 	ExtraStats func() map[string]any
 }
@@ -65,6 +73,7 @@ func NewWithOptions(c *collector.Collector, opts Options) *Server {
 	s.mux.HandleFunc("/ingest/ws", s.handleIngestWS)
 	s.mux.HandleFunc("/stats", s.handleStats)
 	s.mux.HandleFunc("/metrics", s.handleMetrics)
+	s.mux.HandleFunc("/health", s.handleHealth)
 	return s
 }
 
@@ -196,6 +205,57 @@ func (s *Server) handleIngestWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "buffered"})
+}
+
+// handleHealth is the uniform GET /health of the family: closed by default, and when opened it names the service and its version and
+// nothing else (no path, no configuration, no secret).
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("use GET"))
+		return
+	}
+	if !s.opts.HealthOpen {
+		writeError(w, http.StatusNotFound, errors.New("not found"))
+		return
+	}
+	if !isLoopback(r.RemoteAddr) && !s.presentsAToken(r) {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		writeError(w, http.StatusUnauthorized, errors.New("a valid bearer token is required"))
+		return
+	}
+	service := s.opts.Service
+	if service == "" {
+		service = "hydra-umc-telemetry-collector"
+	}
+	version := s.opts.Version
+	if version == "" {
+		version = "unknown"
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": service, "version": version})
+}
+
+// presentsAToken is true when the request carries one of the tokens the collector has; a collector with no token never accepts it.
+func (s *Server) presentsAToken(r *http.Request) bool {
+	for _, token := range []string{s.opts.Token, s.opts.MetricsToken} {
+		if token != "" && bearerMatches(r, token) {
+			return true
+		}
+	}
+	return false
+}
+
+// isLoopback reports whether the remote address of a request is on this machine.
+func isLoopback(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	if i := strings.IndexByte(host, '%'); i >= 0 {
+		host = host[:i]
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {

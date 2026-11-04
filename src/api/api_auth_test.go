@@ -139,3 +139,59 @@ func TestStatsAndMetricsExposeTheNewSignals(t *testing.T) {
 		}
 	}
 }
+
+func getHealth(s *Server, remoteAddr, authorization string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.RemoteAddr = remoteAddr
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestHealthIsClosedByDefault(t *testing.T) {
+	s := NewWithOptions(collector.New(10, &memorySink{}), Options{Token: "0123456789abcdef"})
+	if rec := getHealth(s, "127.0.0.1:5000", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("closed health answered %d, want 404", rec.Code)
+	}
+}
+
+func TestOpenHealthAnswersLoopbackWithTheSharedBody(t *testing.T) {
+	s := NewWithOptions(collector.New(10, &memorySink{}), Options{HealthOpen: true, Service: "svc", Version: "9.9.9"})
+	for _, addr := range []string{"127.0.0.1:5000", "[::1]:5000"} {
+		rec := getHealth(s, addr, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: got %d, want 200", addr, rec.Code)
+		}
+		body := rec.Body.String()
+		for _, want := range []string{`"status":"ok"`, `"service":"svc"`, `"version":"9.9.9"`} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("%s: body %q lacks %s", addr, body, want)
+			}
+		}
+	}
+}
+
+func TestOpenHealthNeedsATokenOffLoopback(t *testing.T) {
+	s := NewWithOptions(collector.New(10, &memorySink{}), Options{HealthOpen: true, Token: "0123456789abcdef", MetricsToken: "fedcba9876543210"})
+	if rec := getHealth(s, "192.0.2.7:5000", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("no token: got %d, want 401", rec.Code)
+	}
+	if rec := getHealth(s, "192.0.2.7:5000", "Bearer wrong"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong token: got %d, want 401", rec.Code)
+	}
+	for _, token := range []string{"0123456789abcdef", "fedcba9876543210"} {
+		if rec := getHealth(s, "192.0.2.7:5000", "Bearer "+token); rec.Code != http.StatusOK {
+			t.Fatalf("right token: got %d, want 200", rec.Code)
+		}
+	}
+}
+
+func TestOpenHealthWithoutATokenNeverAnswersOffLoopback(t *testing.T) {
+	s := NewWithOptions(collector.New(10, &memorySink{}), Options{HealthOpen: true})
+	if rec := getHealth(s, "192.0.2.7:5000", "Bearer anything"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d, want 401", rec.Code)
+	}
+}
