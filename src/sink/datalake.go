@@ -12,6 +12,7 @@ package sink
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -146,8 +147,15 @@ type DatalakeSink struct {
 	// The default is empty: a wrong token or URL is a configuration problem that fixing
 	// the configuration repairs, so those samples wait.
 	PermanentStatuses map[int]bool
+	// Gzip compresses the body of each batch request (Content-Encoding: gzip). It is off by
+	// default because the datalake reads compressed bodies only when started with
+	// --accept-gzip; a datalake that refuses one (400) is remembered and the same chunk is
+	// sent again uncompressed, so turning it on against a datalake without the switch costs
+	// one extra request, not a lost batch.
+	Gzip bool
 
 	batchUnsupported atomic.Bool
+	gzipRejected     atomic.Bool
 }
 
 // DefaultMaxBatch is how many samples one batch request carries when MaxBatch is not set
@@ -218,11 +226,43 @@ func (d *DatalakeSink) postBatch(samples []telemetry.Sample) (int, string, error
 	if err != nil {
 		return 0, "", fmt.Errorf("marshal: %w", err)
 	}
+	if d.Gzip && !d.gzipRejected.Load() {
+		packed, gerr := gzipBytes(payload)
+		if gerr == nil {
+			status, body, perr := d.sendBatch(packed, true)
+			if perr != nil || status != http.StatusBadRequest {
+				return status, body, perr
+			}
+			// 400 to a compressed body: the datalake does not read them (or the batch is bad):
+			// remember it and repeat the chunk plain, which tells the two cases apart
+			d.gzipRejected.Store(true)
+		}
+	}
+	return d.sendBatch(payload, false)
+}
+
+// gzipBytes returns the gzip container of data.
+func gzipBytes(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(data); err != nil {
+		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (d *DatalakeSink) sendBatch(payload []byte, compressed bool) (int, string, error) {
 	req, err := http.NewRequest(http.MethodPost, d.BaseURL+"/ingest/batch", bytes.NewReader(payload))
 	if err != nil {
 		return 0, "", fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if compressed {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
 	if d.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+d.Token)
 	}

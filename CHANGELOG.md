@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Compressed batches towards the datalake (off by default, `-datalake-gzip`):** each `POST /ingest/batch` goes with `Content-Encoding: gzip`, which saves bandwidth on a slow link. The datalake reads compressed bodies only when it runs with `--accept-gzip`; against one that does not, the first compressed batch is answered `400`, the collector repeats it plain, remembers it and keeps sending plain bodies, so no batch is lost. 2 tests.
+
 ## [0.2.0] - The collector can stream windows of a field to the anomaly detector, with optional overlapping windows, both off by default
 
 - **Overlapping windows to the anomaly detector (off by default):** `kind/field=window@percent` (for example `vibration/accel=1024@50`) or `-anomaly-overlap` makes each window start with that share of the newest values of the one before, from 0 to 90 percent, so the detector scores a sliding signal instead of separate blocks. The default is 0, which sends exactly the windows of before; the confirmed samples are still kept once, the series never holds more than one window and the bounded queue still drops the new window when it is full.

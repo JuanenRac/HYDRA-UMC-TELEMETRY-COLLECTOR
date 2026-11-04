@@ -56,6 +56,7 @@ func main() {
 	datalakeToken := flag.String("datalake-token", os.Getenv(datalakeTokenEnv), "bearer token sent to HYDRA-UMC-DATALAKE with every sample (default: $"+datalakeTokenEnv+")")
 	metricsToken := flag.String("metrics-token", os.Getenv(metricsTokenEnv), "bearer token GET /stats and GET /metrics require (default: $"+metricsTokenEnv+"); empty leaves them open")
 	batch := flag.Bool("datalake-batch", true, "send each flush to DATALAKE's POST /ingest/batch (falls back to one request per sample when the datalake has no such route)")
+	batchGzip := flag.Bool("datalake-gzip", false, "compress each batch request with gzip (off by default; the datalake must run with --accept-gzip, otherwise the first batch is repeated uncompressed and the collector keeps sending plain bodies)")
 	permanentStatuses := flag.String("datalake-permanent-statuses", "", "comma-separated extra HTTP statuses (for example 401,403,404) the datalake may answer that discard the sample instead of retrying it for ever; empty keeps retrying")
 	spoolPath := flag.String("spool", "", "file that holds the samples of a datalake outage on disk instead of in memory (empty: no spool)")
 	spoolMax := flag.Int64("spool-max-bytes", 256<<20, "most unsent bytes the -spool file may hold")
@@ -133,6 +134,7 @@ func main() {
 		lake := sink.NewDatalakeSink(*datalakeURL)
 		lake.Token = *datalakeToken
 		lake.Batch = *batch
+		lake.Gzip = *batchGzip
 		lake.PermanentStatuses = statuses
 		s = lake
 		fmt.Printf("[telemetry-collector] delivering to HYDRA-UMC-DATALAKE at %s\n", *datalakeURL)

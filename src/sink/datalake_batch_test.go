@@ -4,6 +4,7 @@
 package sink
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -158,5 +159,72 @@ func TestDatalakeSink_PermanentStatusesDiscardInsteadOfRetryingForever(t *testin
 	plain := (&fakeDatalake{answer: func(string, int) int { return http.StatusNotFound }}).server(t)
 	if err := plain.Write(oneSample()); err == nil || IsInvalidData(err) {
 		t.Fatalf("without the list a 404 must stay retryable, got %v", err)
+	}
+}
+
+// gzipDatalake decodes gzip bodies when accept is true and answers 400 to them otherwise.
+func gzipDatalake(t *testing.T, accept bool) (*DatalakeSink, *[]string) {
+	t.Helper()
+	var mu sync.Mutex
+	encodings := []string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		enc := r.Header.Get("Content-Encoding")
+		encodings = append(encodings, enc)
+		if enc == "gzip" {
+			if !accept {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			zr, err := gzip.NewReader(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			var body struct {
+				Samples []telemetry.Sample `json:"samples"`
+			}
+			if err := json.NewDecoder(zr).Decode(&body); err != nil || len(body.Samples) == 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	t.Cleanup(srv.Close)
+	sink := NewDatalakeSink(srv.URL)
+	sink.Batch = true
+	sink.Gzip = true
+	return sink, &encodings
+}
+
+func TestDatalakeSink_GzipBatchIsSentCompressed(t *testing.T) {
+	sink, encodings := gzipDatalake(t, true)
+	if err := sink.Write(manySamples(5)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if len(*encodings) != 1 || (*encodings)[0] != "gzip" {
+		t.Fatalf("want one gzip request, got %v", *encodings)
+	}
+}
+
+func TestDatalakeSink_GzipRefusedFallsBackToPlainOnce(t *testing.T) {
+	sink, encodings := gzipDatalake(t, false)
+	if err := sink.Write(manySamples(5)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := sink.Write(manySamples(5)); err != nil {
+		t.Fatalf("second write: %v", err)
+	}
+	// the first batch is tried compressed, repeated plain; the next ones go straight to plain
+	want := []string{"gzip", "", ""}
+	if len(*encodings) != len(want) {
+		t.Fatalf("want %v, got %v", want, *encodings)
+	}
+	for i := range want {
+		if (*encodings)[i] != want[i] {
+			t.Fatalf("want %v, got %v", want, *encodings)
+		}
 	}
 }
