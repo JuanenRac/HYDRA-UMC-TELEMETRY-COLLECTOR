@@ -27,5 +27,8 @@
     "port": 8092,
     "health_path": "/health",
     "systemd_unit": "hydra-umc-telemetry-collector.service"
-  }
+  },
+  "depends_on": [
+    "HYDRA-UMC-DATALAKE"
+  ]
 }
