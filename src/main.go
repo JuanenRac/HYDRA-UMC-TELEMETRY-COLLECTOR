@@ -78,6 +78,7 @@ func main() {
 	anomalyQueue := flag.Int("anomaly-queue", 64, "windows that may wait to be sent to the detector; a full queue drops the new window")
 	anomalyMaxSeries := flag.Int("anomaly-max-series", 64, "most distinct (source, kind, field) signals the stream keeps a window for")
 	anomalyPlain := flag.Bool("anomaly-allow-plaintext", false, "allow the detector token over plain http to a host that is not on this machine")
+	identityKeyFile := flag.String("identity-key-file", os.Getenv(identityKeyFileEnv), "file with the signing key of HYDRA-UMC-SERVER (its JWT_SECRET): a valid token of the SERVER is then accepted next to the tokens, every route (/stats, /metrics and GET /health too) demands an identity and a viewer may read but not ingest; off by default (default: $"+identityKeyFileEnv+")")
 	healthOpen := flag.Bool("health-open", healthOpenFromEnv(), "open GET /health (default: $"+healthOpenEnv+"); closed it answers 404; open it answers a caller on loopback, and any other caller needs the ingest or metrics token")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
@@ -122,7 +123,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] -spool-max-bytes must be at least 1")
 		os.Exit(2)
 	}
-	if problem := startupProblem(*addr, *token, *allowAnonymous); problem != "" {
+	var identityKey []byte
+	if *identityKeyFile != "" {
+		key, err := api.LoadIdentityKey(*identityKeyFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] -identity-key-file: "+err.Error())
+			os.Exit(2)
+		}
+		identityKey = key
+	}
+	if problem := startupProblem(*addr, *token, *allowAnonymous || identityKey != nil); problem != "" {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
 		os.Exit(2)
 	}
@@ -168,7 +178,7 @@ func main() {
 		fmt.Printf("[telemetry-collector] downsampling %d kind(s): %s\n", len(downsampleTable), *downsampleRules)
 	}
 	var mqttStats func() map[string]any
-	server := api.NewWithOptions(c, api.Options{Token: *token, MetricsToken: *metricsToken, HealthOpen: *healthOpen, Service: "hydra-umc-telemetry-collector", Version: Version, ExtraStats: func() map[string]any {
+	server := api.NewWithOptions(c, api.Options{Token: *token, MetricsToken: *metricsToken, IdentityKey: identityKey, HealthOpen: *healthOpen, Service: "hydra-umc-telemetry-collector", Version: Version, ExtraStats: func() map[string]any {
 		extra := map[string]any{}
 		if mqttStats != nil {
 			for key, value := range mqttStats() {

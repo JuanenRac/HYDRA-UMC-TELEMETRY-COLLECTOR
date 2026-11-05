@@ -20,6 +20,8 @@ collector only starts on a loopback address: a non-loopback `-addr` is refused
 unless `-allow-anonymous` is passed. A request body larger than 1 MiB is
 refused with `413` and never read in full.
 
+`-identity-key-file FILE` (or `HYDRA_UMC_TELEMETRY_COLLECTOR_IDENTITY_KEY_FILE`; off by default) accepts the signed token of HYDRA-UMC-SERVER next to the token of the service: a viewer may read but not change, and a request with no credential is refused even on loopback, `GET /health` and `GET /stats` included.
+
 ---
 
 ## `POST /ingest/can`
@@ -136,6 +138,7 @@ A producer that **restarts** begins its counter again, far behind everything it 
 | `-downsample kind=intervalMs[:function],...` | Folds the samples of a high-frequency kind (for example `vibration=1000:max`) into ONE sample per time bucket of that many milliseconds, per source, before they are buffered. The function is `mean` (default), `min`, `max`, `last` or `sum`, applied to every field; the sample that leaves carries the start of the bucket as its `timestamp`. A bucket closes when a later sample of the same source and kind arrives, or two seconds after its end when the producer went quiet, and every open bucket is delivered on shutdown. A closed bucket that finds the buffer full waits (`aggregateBacklog`) and new samples of that kind are refused with `503` once the backlog reaches the buffer capacity. A sample that arrives for a bucket older than the open one leaves as a bucket of its own (`lateBuckets`). Kinds that are not listed are untouched. |
 | `-datalake-permanent-statuses 401,403,404` | HTTP client errors (400-499) from the datalake that discard the sample (it is counted as `quarantined`) instead of waiting for the configuration to be fixed. Default empty: they wait. |
 | `-metrics-token` | Makes `GET /stats` and `GET /metrics` require a bearer token. |
+| `-identity-key-file` | File with the signing key of HYDRA-UMC-SERVER: its signed tokens are accepted and nothing is open (off by default). |
 | `-health-open` / `HYDRA_UMC_TELEMETRY_COLLECTOR_HEALTH_OPEN` | Opens `GET /health` (closed by default: `404`). Open, it answers `{"status": "ok", "service": ..., "version": ...}` to a caller on loopback; "+SENT.replace("a bearer token of the service","the ingest token or the metrics token")+" |
 
 ## Stream to the anomaly detector (all off by default)

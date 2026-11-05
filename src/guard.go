@@ -21,6 +21,9 @@ import (
 // metricsTokenEnv supplies the bearer token GET /stats and GET /metrics require.
 const metricsTokenEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_METRICS_TOKEN"
 
+// identityKeyFileEnv names the file with the signing key of HYDRA-UMC-SERVER (the identity of the server, off unless it is given).
+const identityKeyFileEnv = "HYDRA_UMC_TELEMETRY_COLLECTOR_IDENTITY_KEY_FILE"
+
 // metricsTokenProblem applies the same minimum length as the ingest token.
 func metricsTokenProblem(token string) string {
 	if token != "" && len(token) < minTokenLength {

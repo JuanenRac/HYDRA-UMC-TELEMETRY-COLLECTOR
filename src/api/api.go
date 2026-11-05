@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
@@ -47,6 +48,9 @@ type Options struct {
 	// caller on loopback; any other caller must present the ingest token or the metrics token (401 otherwise), and a collector with
 	// no token never answers a caller that is not on loopback.
 	HealthOpen bool
+	// IdentityKey, when set, is the signing key of HYDRA-UMC-SERVER: a valid signed token of the server is then accepted next to the tokens above (a viewer may read
+	// but not ingest), and nothing is open any more, not even /stats, /metrics or GET /health, and not from this machine. Nil leaves the earlier rules.
+	IdentityKey []byte
 	// Service and Version name the collector in the body of GET /health.
 	Service string
 	Version string
@@ -95,7 +99,30 @@ func writeError(w http.ResponseWriter, status int, err error) {
 // configured everything is allowed; otherwise the bearer token must match, and
 // the comparison takes the same time whatever prefix matched.
 func (s *Server) authorized(r *http.Request) bool {
+	if s.opts.IdentityKey != nil {
+		return s.identityAllowed(r, true, s.opts.Token)
+	}
 	return bearerMatches(r, s.opts.Token)
+}
+
+// identityAllowed is the rule with the identity of the SERVER on: one of the own tokens given, or a valid signed token of the SERVER (any role reads, admin or
+// operator changes). Nothing else, and never open.
+func (s *Server) identityAllowed(r *http.Request, write bool, own ...string) bool {
+	scheme, presented, found := strings.Cut(r.Header.Get("Authorization"), " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		return false
+	}
+	presented = strings.TrimSpace(presented)
+	for _, token := range own {
+		if token != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(token)) == 1 {
+			return true
+		}
+	}
+	identity, err := VerifyServerToken(presented, s.opts.IdentityKey, time.Now())
+	if err != nil {
+		return false
+	}
+	return !write || identity.CanWrite()
 }
 
 // bearerMatches is true when expected is empty (nothing to check) or the request carries it as a
@@ -114,7 +141,11 @@ func bearerMatches(r *http.Request, expected string) bool {
 // guardRead checks the optional metrics token of the two read routes; it returns false after
 // answering 401 itself.
 func (s *Server) guardRead(w http.ResponseWriter, r *http.Request) bool {
-	if bearerMatches(r, s.opts.MetricsToken) {
+	if s.opts.IdentityKey != nil {
+		if s.identityAllowed(r, false, s.opts.MetricsToken) {
+			return true
+		}
+	} else if bearerMatches(r, s.opts.MetricsToken) {
 		return true
 	}
 	w.Header().Set("WWW-Authenticate", "Bearer")
@@ -219,7 +250,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
-	if !isLoopback(r.RemoteAddr) && !s.presentsAToken(r) {
+	if s.opts.IdentityKey != nil {
+		if !s.identityAllowed(r, false, s.opts.Token, s.opts.MetricsToken) {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			writeError(w, http.StatusUnauthorized, errors.New("a valid identity is required"))
+			return
+		}
+	} else if !isLoopback(r.RemoteAddr) && !s.presentsAToken(r) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		writeError(w, http.StatusUnauthorized, errors.New("a valid bearer token is required"))
 		return
