@@ -9,3 +9,5 @@ build/
 # Python bytecode (generated locally; never source)
 __pycache__/
 *.py[cod]
+# Coverage data written by the test runs
+.coverage
