@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-196%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-201%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -35,7 +35,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Version | `0.2.1` |
 | Reifegrad | Funktionsfähig |
-| Tests | 196 (`go test ./...`) |
+| Tests | 201 (`go test ./...`) |
 | Technik | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | Ziel | Der Raspberry Pi CM5 einer HYDRA-UMC-Zelle |
 | Auf echter Hardware | Nicht zutreffend: nichts hiervon läuft auf Hardware |
@@ -51,7 +51,7 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 | Bereich | Stand | Was das hier bedeutet |
 |---|---|---|
 | Software | 🟡 | Funktioniert für seinen Hauptzweck; die Ehrlichkeitsprüfung oben nennt, was noch fehlt |
-| Tests | 🟢 | 196 automatische Tests, bei jeder Änderung ausgeführt |
+| Tests | 🟢 | 201 automatische Tests, bei jeder Änderung ausgeführt |
 | Echte Hardware | 🟢 | Nicht zutreffend: nichts hiervon läuft auf Hardware |
 | Schnittstelle und Protokolle | 🟡 | Die angebotenen Routen oder Nachrichten sind dokumentiert und mit einem Client getestet; noch nicht jeder Client hat sie benutzt |
 | Integration | 🟡 | Es läuft zusammen mit den anderen Diensten auf dem CM5-Prüfstand, und seine Nachrichten folgen den gemeinsamen Verträgen des SDK |
@@ -113,7 +113,7 @@ flowchart LR
 * **Warum die Sammlung von HYDRA-UMC-DATALAKE selbst getrennt ist.** Sammlung (HYDRA-UMC-SERVER abfragen, puffern, Schreibvorgänge bündeln) ist ein E/A-gebundenes Anliegen, das sich von Speicherung/Abfrage unterscheidet - es als separaten Prozess zu halten bedeutet, dass ein Neustart des Collectors oder ein Gegendruck-Spitzenwert nicht den eigenen Abfragepfad des Data Lake berührt.
 * **Warum ein fehlgeschlagenes Sink-Schreiben den Batch erneut einreiht, statt ihn zu verwerfen - außer dem einen Sample, das niemals erfolgreich sein wird.** `src/collector` ist das, was das Versprechen "Gepufferte Zustellung: kein Datenverlust" tatsächlich einlöst: `FlushOnce` entfernt einen abgezapften Batch erst dann aus dem Puffer, wenn `Sink.Write` ihn bestätigt, und legt ihn bei einem Transportfehler direkt wieder vorne ein - ein echter Ausfall wiederholt dieselben Samples, statt sie zu verlieren. Die einzige Ausnahme ist ein Sample, das der Sink selbst DAUERHAFT als ungültig abgelehnt hat (siehe `sink.InvalidDataError` unten) - es bedingungslos erneut einzureihen, stellte es früher für immer wieder ganz nach vorne und blockierte jedes gültige Sample dahinter; jetzt wird es stattdessen unter Quarantäne gestellt (verworfen, gezählt in `GET /stats`s `quarantined`), während der Rest des Batches wie gewohnt erneut eingereiht wird. Der Puffer (`src/buffer`) bleibt trotzdem begrenzt - ein Ausfall, der seine Kapazität übersteigt, verwirft tatsächlich die ältesten überzähligen Einträge, eine echte, ehrliche Grenze statt eines Versprechens von unendlichem Speicher.
 * **Warum CAN und WebSocket beide in dieselbe `Sample`-Form geparst werden.** `src/telemetry` normalisiert beide heterogenen Quellen zu einer einzigen Struktur, bevor irgendetwas den Puffer oder den Sink berührt - der eigentliche Mechanismus hinter "ein Motorstromspitzenwert auf CAN korrekt korreliert mit einem Ergebnis eines Vision Node": keine nachgelagerte Stufe muss wissen, über welches Protokoll ein Sample eintraf.
-* **Warum das CAN-Drahtformat die eigene v0-Konvention dieses Projekts bleibt, solange die Tabelle des Vertrags nicht angegeben ist.** Standardmäßig liest der Collector den Ein-Byte-Signalcode seines eigenen v0-Formats. Mit `-can-ids DATEI` (der Vertrag `CanIds` des SDK, `contracts/can_ids.json`, dasselbe Dokument, gegen das die Firmware-Tabellen geschrieben werden) wird ein Frame nach seiner Kennung eingeordnet: der Health-Frame einer Controller-Platine (`slot_base + slot * slot_window + 0x11`) wird zu einer Probe `board_health` der Quelle `board-<slot>`, andere bekannte Frames und der Not-Halt werden gezählt und in Ruhe gelassen, und eine Kennung, die der Vertrag nicht kennt, wird abgelehnt, nie geraten. Die Datei wird beim Lesen geprüft, eine falsche verhindert also den Start. Nichts davon lief gegen eine Platine.
+* **Warum das CAN-Drahtformat die eigene v0-Konvention dieses Projekts bleibt, solange die Tabelle des Vertrags nicht angegeben ist.** Standardmäßig liest der Collector den Ein-Byte-Signalcode seines eigenen v0-Formats. Mit `-can-ids DATEI` (der Vertrag `CanIds` des SDK, `contracts/can_ids.json`, dasselbe Dokument, gegen das die Firmware-Tabellen geschrieben werden) wird ein Frame nach seiner Kennung eingeordnet: der Health-Frame einer Controller-Platine (`slot_base + slot * slot_window + 0x11`) wird zu einer Probe `board_health` der Quelle `board-<slot>`, andere bekannte Frames werden gezählt und in Ruhe gelassen, ein Frame des Not-Halts wird zur Probe `estop_frame` der Quelle `stack` (ein fehlerhafter wird markiert, nie verworfen), und eine Kennung, die der Vertrag nicht kennt, wird abgelehnt, nie geraten. Die Datei wird beim Lesen geprüft, eine falsche verhindert also den Start. Nichts davon lief gegen eine Platine.
 * **Warum `DatalakeSink` ein Sample pro HTTP-Anfrage schreibt.** Das `POST /ingest` von HYDRA-UMC-DATALAKE nimmt ein Sample entgegen, ein "Stapelschreiben" sind also in Wirklichkeit N Anfragen, der Reihe nach, die beim ersten Fehler anhalten. `PartialWriteError` sagt, wie viele bestätigt wurden (`202`), und nur der Rest wird wiederholt; ein Sample, das der Sink als ungültig ablehnt (`400` oder `413`), ist das einzige, das verworfen wird, und was danach kommt, wird wiederholt. Eine doppelte Zeile kann nur entstehen, wenn DATALAKE eine Anfrage angenommen hat und die Antwort verloren ging; DATALAKE hält einen Wert pro (Quelle, Art, Feld, Zeitstempel), ein erneutes Senden überschreibt also, statt zu verdoppeln.
 * **Wie sich das in das restliche Ökosystem einfügt.** Ein Geschwisterdienst unter HYDRA-UMC-DATALAKE: er empfängt die Telemetrie, die Produzenten per HTTP an ihn schicken, und schreibt sie in den gemeinsamen Zeitreihenspeicher. Er fragt nichts ab, und noch sendet ihm nichts im Ökosystem Daten: ein Produzent (ein Abonnement der Roboter-Deltas des Servers, ein SocketCAN-Leser auf dem CM5) muss noch geschrieben werden.
 * **Warum Deduplizierung ein separates `dedup`-Paket ist, das auf einer optionalen `Sequence` basiert, nicht auf einem Hash des Sample-Inhalts selbst.** Eine echte Reconnect sendet exakt dieselben Bytes erneut, daher würde Content-Hashing für diesen Fall funktionieren - aber es würde auch still zwei echt unterschiedliche Samples verschlucken, die zufällig alle Felder teilen (z. B. zwei `0.0`-Messwerte im Abstand einer Sekunde). Eine Sequenznummer pro Produzent ist das, was ein echtes Gerät ohnehin schon verfolgen muss, um seine eigenen unbestätigten Nachrichten im Blick zu behalten - sie wiederzuverwenden ist also das ehrliche, echte Signal, keine Vermutung, die aus Daten abgeleitet wird, die tatsächlich keine Eindeutigkeit versprechen. `Sequence == 0`/weggelassen nimmt einen Produzenten vollständig aus, sodass sich am bestehenden Verhalten für ein Gerät, das keine sendet, nichts ändert.
@@ -156,7 +156,7 @@ Benötigt Go 1.24 oder neuer.
 
 ## 🧪 Tests
 
-196 automatische Tests laufen mit `cd src && go test ./...`. Sie brauchen weder Hardware noch etwas außerhalb dieses Rechners.
+201 automatische Tests laufen mit `cd src && go test ./...`. Sie brauchen weder Hardware noch etwas außerhalb dieses Rechners.
 
 Die CI führt `HYDRA_UMC_CI=1 python tools/ci_validate.py` aus; das prüft das Manifest, die Dokumente, die acht READMEs und die Bilder.
 

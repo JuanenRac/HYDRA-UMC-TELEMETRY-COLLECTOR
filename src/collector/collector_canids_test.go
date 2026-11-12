@@ -71,7 +71,7 @@ func TestWithATableAHealthFrameIsDeliveredAsASampleOfItsBoard(t *testing.T) {
 func TestWithATableKnownTrafficIsAcceptedAndNotBuffered(t *testing.T) {
 	c := New(10, &memorySink{})
 	c.SetCANTable(table(t))
-	for _, id := range []uint32{1, 0x600 + 0x10, 0x600 + 3} {
+	for _, id := range []uint32{0x600 + 0x10, 0x600 + 3} {
 		if err := c.IngestCAN(id, []byte{1, 2}); err != nil {
 			t.Fatalf("0x%X: %v", id, err)
 		}
@@ -103,5 +103,17 @@ func TestWithATableAFullBufferIsStillBackpressure(t *testing.T) {
 	}
 	if err := c.IngestCAN(0x611, healthFrame(2)); err == nil {
 		t.Fatal("a full buffer accepted another sample")
+	}
+}
+
+func TestWithATableAStopFrameIsBufferedAsASampleOfTheStack(t *testing.T) {
+	sink := &memorySink{}
+	c := New(10, sink)
+	c.SetCANTable(table(t))
+	if err := c.IngestCAN(1, []byte{1, 4, 3, 7, 5, 0, 0xFE, 0xFB}); err != nil {
+		t.Fatal(err)
+	}
+	if c.FlushOnce(10) != 1 || sink.written[0][0].Kind != "estop_frame" || sink.written[0][0].Fields["malformed"] != 0 || sink.written[0][0].Fields["is_trip"] != 1 {
+		t.Fatalf("%+v", sink.written)
 	}
 }

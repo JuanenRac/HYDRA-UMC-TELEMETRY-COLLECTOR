@@ -145,8 +145,8 @@ func TestAWrongHealthFrameIsABadPayload(t *testing.T) {
 }
 
 func TestKnownTrafficIsLeftAloneAndAnUnknownIdentifierIsRefused(t *testing.T) {
-	table := load(t)
-	// the relay request of slot 1 (offset 0x10), a bootloader answer of slot 0 (offset 3), and the stop
+	// the relay request of slot 1 (offset 0x10), a bootloader answer of slot 0 (offset 3), and the stop (left alone when the contract has no stop frame)
+	table := withoutStopFrame(t)
 	for _, id := range []uint32{0x640 + 0x10, 0x600 + 3, 1} {
 		if _, err := table.Decode(id, []byte{1, 2, 3}); !errors.Is(err, ErrIgnored) {
 			t.Errorf("0x%X: %v", id, err)
@@ -223,5 +223,119 @@ func TestTheSamplesPassTheCollectorRules(t *testing.T) {
 	table.Now = func() int64 { return 1 } // implausible time: Validate refuses it, and so does Decode
 	if _, err := table.Decode(0x611, health(0, 0, 0, 0, 0, 0)); !errors.Is(err, telemetry.ErrImplausibleTimestamp) {
 		t.Fatalf("%v", err)
+	}
+}
+
+func withoutStopFrame(t *testing.T) *Table {
+	t.Helper()
+	table, err := Parse(contract(func(d map[string]any) { delete(d, "estop_frame") }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	table.Now = func() int64 { return 1_790_000_000_000 }
+	return table
+}
+
+func stopFrame(kind, detail, source, epoch byte, sequence uint16) []byte {
+	return []byte{kind, detail, source, epoch, byte(sequence), byte(sequence >> 8), kind ^ 0xFF, detail ^ 0xFF}
+}
+
+func TestAStopFrameBecomesASampleOfTheStack(t *testing.T) {
+	table := load(t)
+	s, err := table.Decode(1, stopFrame(1, 4, 3, 7, 0x0102))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.SourceID != "stack" || s.Kind != "estop_frame" || s.Timestamp != 1_790_000_000_000 {
+		t.Fatalf("%+v", s)
+	}
+	want := map[string]float64{"kind": 1, "detail": 4, "source": 3, "epoch": 7, "sequence": 0x0102, "is_trip": 1, "malformed": 0}
+	for k, v := range want {
+		if s.Fields[k] != v {
+			t.Errorf("%s = %v, want %v", k, s.Fields[k], v)
+		}
+	}
+	for _, frame := range [][]byte{stopFrame(2, 0, 0, 7, 9), stopFrame(3, 1, 0, 7, 10), stopFrame(3, 0, 16, 7, 11)} {
+		s, err := table.Decode(1, frame)
+		if err != nil || s.Fields["malformed"] != 0 {
+			t.Fatalf("%v %v", s.Fields, err)
+		}
+	}
+	if table.Counters()["stopFrames"] != 4 || table.Counters()["badPayloads"] != 0 {
+		t.Fatalf("%v", table.Counters())
+	}
+}
+
+func TestAMalformedStopFrameIsReportedNeverDropped(t *testing.T) {
+	table := load(t)
+	good := stopFrame(1, 4, 3, 7, 5)
+	bad := map[string][]byte{
+		"short":              good[:7],
+		"long":               append(append([]byte{}, good...), 0),
+		"empty":              nil,
+		"kind complement":    append(append([]byte{}, good[:6]...), good[6]^1, good[7]),
+		"detail complement":  append(append([]byte{}, good[:7]...), good[7]^1),
+		"unknown kind":       stopFrame(9, 4, 3, 7, 5),
+		"unknown source":     stopFrame(1, 4, 12, 7, 5),
+		"source above range": stopFrame(1, 4, 17, 7, 5),
+	}
+	for name, data := range bad {
+		s, err := table.Decode(1, data)
+		if err != nil || s.Fields["malformed"] != 1 || s.Kind != "estop_frame" {
+			t.Errorf("%s: %v %v", name, s.Fields, err)
+		}
+	}
+	if table.Counters()["badPayloads"] != uint64(len(bad)) {
+		t.Fatalf("%v", table.Counters())
+	}
+}
+
+func TestToolHeadIdentifiersAreNamedByTheContract(t *testing.T) {
+	table := load(t)
+	if table.ToolHeadName(0x095) != "IMPACT_EVENT" || table.ToolHeadName(0x100) != "GLOBAL_STATUS" || table.ToolHeadName(0x000) != "" {
+		t.Fatalf("%q %q", table.ToolHeadName(0x095), table.ToolHeadName(0x100))
+	}
+	if withoutStopFrame(t).ToolHeadName(0x095) != "IMPACT_EVENT" {
+		t.Fatal("the tool head section depends on the stop section")
+	}
+	noHead, err := Parse(contract(func(d map[string]any) { delete(d, "tool_head") }))
+	if err != nil || noHead.ToolHeadName(0x095) != "" {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestTheOptionalSectionsAreCheckedWhenTheyArePresent(t *testing.T) {
+	section := func(d map[string]any, name string) map[string]any { return d[name].(map[string]any) }
+	cases := map[string]func(map[string]any){
+		"dlc":           func(d map[string]any) { section(d, "estop_frame")["dlc"] = 7 },
+		"bytes":         func(d map[string]any) { section(d, "estop_frame")["bytes"] = []any{"x"} },
+		"repeated kind": func(d map[string]any) { section(d, "estop_frame")["kinds"].(map[string]any)["ALIVE"] = 1 },
+		"kind value":    func(d map[string]any) { section(d, "estop_frame")["kinds"].(map[string]any)["TRIP"] = 0 },
+		"swapped kinds": func(d map[string]any) {
+			k := section(d, "estop_frame")["kinds"].(map[string]any)
+			k["TRIP"], k["RELEASE"] = 2, 1
+		},
+		"repeated reason":   func(d map[string]any) { section(d, "estop_frame")["trip_reasons"].(map[string]any)["STOP_ALL"] = 1 },
+		"brain not zero":    func(d map[string]any) { section(d, "estop_frame")["sources"].(map[string]any)["KINEMATIC_BRAIN"] = 1 },
+		"bridge in range":   func(d map[string]any) { section(d, "estop_frame")["sources"].(map[string]any)["HOST_BRIDGE"] = 4 },
+		"source count":      func(d map[string]any) { delete(section(d, "estop_frame")["sources"].(map[string]any), "HOST_BRIDGE") },
+		"unknown estop key": func(d map[string]any) { section(d, "estop_frame")["surprise"] = 1 },
+		"bus":               func(d map[string]any) { section(d, "tool_head")["bus"] = "stack_a" },
+		"no messages":       func(d map[string]any) { section(d, "tool_head")["messages"] = []any{} },
+		"repeated id": func(d map[string]any) {
+			m := section(d, "tool_head")["messages"].([]any)
+			m[1].(map[string]any)["id"] = m[0].(map[string]any)["id"]
+		},
+		"repeated name": func(d map[string]any) {
+			m := section(d, "tool_head")["messages"].([]any)
+			m[1].(map[string]any)["name"] = m[0].(map[string]any)["name"]
+		},
+		"id out of range":  func(d map[string]any) { section(d, "tool_head")["messages"].([]any)[0].(map[string]any)["id"] = 2048 },
+		"unknown head key": func(d map[string]any) { section(d, "tool_head")["surprise"] = 1 },
+	}
+	for name, mutate := range cases {
+		if _, err := Parse(contract(mutate)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "note": "The identifiers of the stack bus of HYDRA-UMC (STACK A). A message of a controller board has the identifier slot_base + slot * slot_window + offset; the emergency stop is one identifier for the whole stack, below every slot. Each identifier has one emitter. The firmware, its host tools and HYDRA-UMC-TELEMETRY-COLLECTOR read this document; nothing here has run on a board.",
+  "note": "The identifiers of the stack bus of HYDRA-UMC (STACK A), of the tool head bus of URTC and the frame of the emergency stop. A message of a controller board has the identifier slot_base + slot * slot_window + offset; the emergency stop is one identifier for the whole stack, below every slot; the tool head messages are on the downlink bus of a controller board, not on STACK A, and their numbers are those of the URTC protocol (spec/can_protocol.json of URTC-COMMON). Each identifier has one emitter. The firmware, its host tools and HYDRA-UMC-TELEMETRY-COLLECTOR read this document; nothing here has run on a board.",
   "estop_id": 1,
   "slot_base": 1536,
   "slot_window": 64,
@@ -101,5 +101,578 @@
       "offset": 35,
       "emitter": "bootloader"
     }
-  ]
+  ],
+  "estop_frame": {
+    "dlc": 8,
+    "bytes": [
+      "kind",
+      "detail",
+      "source",
+      "epoch",
+      "sequence_low",
+      "sequence_high",
+      "kind_complement",
+      "detail_complement"
+    ],
+    "kinds": {
+      "TRIP": 1,
+      "RELEASE": 2,
+      "ALIVE": 3
+    },
+    "trip_reasons": {
+      "OPERATOR": 1,
+      "STOP_ALL": 2,
+      "HARDWARE_INPUT": 3,
+      "SAFETY_ZONE": 4,
+      "HOST_LINK_LOST": 5,
+      "CONTROLLER_FAULT": 6,
+      "BUS_FAULT": 7,
+      "POWER_LOSS": 8,
+      "UNSPECIFIED": 255
+    },
+    "sources": {
+      "KINEMATIC_BRAIN": 0,
+      "SLOT_BOARD_FIRST": 1,
+      "SLOT_BOARD_LAST": 8,
+      "HOST_BRIDGE": 16
+    }
+  },
+  "tool_head": {
+    "source": "URTC-COMMON spec/can_protocol.json",
+    "protocol_version": 1,
+    "bit_rate_bps": 500000,
+    "bus": "tool_head_downlink",
+    "messages": [
+      {
+        "id": 149,
+        "name": "IMPACT_EVENT",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 256,
+        "name": "GLOBAL_STATUS",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 272,
+        "name": "QUERY_ACTIVE_TOOL",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 273,
+        "name": "ACTIVE_TOOL_RESP",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 288,
+        "name": "MOTION_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 304,
+        "name": "SOLDER_SETPOINT",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 305,
+        "name": "SOLDER_FEEDER_RESET",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 306,
+        "name": "SOLDER_FEEDER_POS",
+        "direction": "both"
+      },
+      {
+        "id": 309,
+        "name": "SOLDER_TELEMETRY",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 320,
+        "name": "DRILL_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 325,
+        "name": "VACUUM_TELEMETRY",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 327,
+        "name": "DRILL_TELEMETRY",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 336,
+        "name": "AOI_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 341,
+        "name": "AOI_TELEMETRY",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 352,
+        "name": "LASER_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 357,
+        "name": "LASER_TELEMETRY",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 368,
+        "name": "PRINTER_THERMAL_MOTION",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 371,
+        "name": "PRINTER_LAYERFAN_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 373,
+        "name": "PRINTER_HOTEND_TELEMETRY",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 375,
+        "name": "PRINTER_LAYERFAN_RPM",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 376,
+        "name": "PRINTER_HOTENDFAN_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 377,
+        "name": "PRINTER_HOTENDFAN_RPM",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 384,
+        "name": "EXPANSION_SPI_REQ",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 385,
+        "name": "EXPANSION_SPI_RESP",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 386,
+        "name": "EXPANSION_DIAG0_REQ",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 387,
+        "name": "EXPANSION_DIAG0_RESP",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 400,
+        "name": "FRAM_QUERY",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 401,
+        "name": "FRAM_STATE_RESP",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 402,
+        "name": "ERASE_FRAM",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 416,
+        "name": "SET_EXPANSION_TYPE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 417,
+        "name": "EXPANSION_TYPE_RESP",
+        "direction": "both"
+      },
+      {
+        "id": 418,
+        "name": "SET_FREE_TOOL",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 419,
+        "name": "FREE_TOOL_CONFIG_RESP",
+        "direction": "both"
+      },
+      {
+        "id": 420,
+        "name": "SET_DEVICE_SERIAL",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 421,
+        "name": "PERIPHERAL_INFO_RESP",
+        "direction": "both"
+      },
+      {
+        "id": 422,
+        "name": "SET_MLX_VARIANT",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 423,
+        "name": "MLX_VARIANT_RESP",
+        "direction": "both"
+      },
+      {
+        "id": 424,
+        "name": "BLACKBOX_QUERY",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 425,
+        "name": "BLACKBOX_CHUNK",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 426,
+        "name": "THERMAL_STATS_QUERY",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 427,
+        "name": "THERMAL_STATS_RESP",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 428,
+        "name": "SET_MULTINODE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 429,
+        "name": "MULTINODE_CONFIG_RESP",
+        "direction": "both"
+      },
+      {
+        "id": 430,
+        "name": "SET_FEATURES",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 431,
+        "name": "FEATURES_RESP",
+        "direction": "both"
+      },
+      {
+        "id": 432,
+        "name": "ELECTROMAGNET_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 440,
+        "name": "HEALTH_PROFILE",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 441,
+        "name": "PID_CONFIG",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 442,
+        "name": "PID_STATE_RESP",
+        "direction": "both"
+      },
+      {
+        "id": 443,
+        "name": "HEALTH_INFO",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 444,
+        "name": "CRASH_DUMP_QUERY",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 445,
+        "name": "CRASH_DUMP_RESP",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 448,
+        "name": "SPOT_WELD_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 464,
+        "name": "UV_CURING_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 480,
+        "name": "HOTAIR_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 496,
+        "name": "CRIMPING_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 512,
+        "name": "ULTRASONIC_WELD_CMD",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 528,
+        "name": "SLAVE_ENTER_BOOTLOADER",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 529,
+        "name": "SLAVE_START_UPDATE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 530,
+        "name": "SLAVE_DIGEST_CHUNK",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 531,
+        "name": "SLAVE_DATA",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 532,
+        "name": "SLAVE_END_UPDATE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 533,
+        "name": "SLAVE_STATUS",
+        "direction": "both"
+      },
+      {
+        "id": 534,
+        "name": "SLAVE_PROGRESS",
+        "direction": "both"
+      },
+      {
+        "id": 535,
+        "name": "SLAVE_VERSION_RESP_1",
+        "direction": "both"
+      },
+      {
+        "id": 536,
+        "name": "SLAVE_VERSION_RESP_2",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 537,
+        "name": "SLAVE_VERIFY_FAIL_REASON",
+        "direction": "both"
+      },
+      {
+        "id": 538,
+        "name": "SLAVE_RECORD_CHUNK",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 544,
+        "name": "SLAVE_REG_WRITE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 545,
+        "name": "SLAVE_REG_READ",
+        "direction": "both"
+      },
+      {
+        "id": 546,
+        "name": "SLAVE_APP_PATCH",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 560,
+        "name": "PASTE_JETTING_CONFIG",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 561,
+        "name": "PASTE_JETTING_PULSE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 576,
+        "name": "ADS1115_CONFIG",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 577,
+        "name": "ADS1115_TRIGGER",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 578,
+        "name": "ADS1115_RESULT",
+        "direction": "both"
+      },
+      {
+        "id": 579,
+        "name": "FLYING_PROBE_BASIC",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 592,
+        "name": "THERMAL_TRIGGER",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 593,
+        "name": "THERMAL_STATUS",
+        "direction": "both"
+      },
+      {
+        "id": 594,
+        "name": "THERMAL_RAW_CHUNK_REQ",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 595,
+        "name": "THERMAL_RAW_CHUNK",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 596,
+        "name": "THERMAL_CAL_CHUNK_REQ",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 597,
+        "name": "THERMAL_CAL_CHUNK",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2025,
+        "name": "VERSION_PATCH_RESPONSE",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2026,
+        "name": "BOOTLOADER_SELECT",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2027,
+        "name": "BOOTLOADER_SELECT_RESPONSE",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2028,
+        "name": "BOOTLOADER_SIGNATURE_CHUNK",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2029,
+        "name": "BOOTLOADER_KEY_ID",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2030,
+        "name": "BOOTLOADER_SERIAL_CHUNK",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2031,
+        "name": "BOOTLOADER_SERIAL_RESULT",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2032,
+        "name": "ENTER_BOOTLOADER",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2033,
+        "name": "START_UPDATE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2034,
+        "name": "DATA",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2035,
+        "name": "PAGE_ACK",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2036,
+        "name": "END_UPDATE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2037,
+        "name": "STATUS",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2038,
+        "name": "HEARTBEAT",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2039,
+        "name": "HMAC_CHUNK",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2040,
+        "name": "QUERY_VERSION",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2041,
+        "name": "VERSION_RESPONSE",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2042,
+        "name": "BOOTLOADER_VERSION_RESPONSE",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2043,
+        "name": "QUERY_ERROR_COUNTERS",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2044,
+        "name": "ERROR_COUNTERS_RESPONSE",
+        "direction": "board_to_host"
+      },
+      {
+        "id": 2045,
+        "name": "AUTHORIZE_DOWNGRADE",
+        "direction": "host_to_board"
+      },
+      {
+        "id": 2046,
+        "name": "READBACK",
+        "direction": "both"
+      },
+      {
+        "id": 2047,
+        "name": "READBACK_PAGE_ACK",
+        "direction": "host_to_board"
+      }
+    ]
+  }
 }

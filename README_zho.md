@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-196%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-201%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -35,7 +35,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | 版本 | `0.2.1` |
 | 成熟度 | 可用 |
-| 测试 | 196 (`go test ./...`) |
+| 测试 | 201 (`go test ./...`) |
 | 技术栈 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | 目标 | HYDRA-UMC 工作单元的 Raspberry Pi CM5 |
 | 真实硬件 | 不适用：这里的内容不在硬件上运行 |
@@ -51,7 +51,7 @@ GPL-3.0-or-later - see LICENSE
 | 领域 | 状态 | 在这里的含义 |
 |---|---|---|
 | 软件 | 🟡 | 主要用途可用；上面的诚实性检查列出了仍然缺少的内容 |
-| 测试 | 🟢 | 196 项自动测试，每次变更都会运行 |
+| 测试 | 🟢 | 201 项自动测试，每次变更都会运行 |
 | 真实硬件 | 🟢 | 不适用：这里的内容不在硬件上运行 |
 | 接口与协议 | 🟡 | 提供的路由或消息已有文档，并用客户端测试过；尚未被所有客户端使用 |
 | 集成 | 🟡 | 在 CM5 测试台上与其他服务一起运行，其消息遵循 SDK 的共享契约 |
@@ -113,7 +113,7 @@ flowchart LR
 * **为何数据采集与 HYDRA-UMC-DATALAKE 本身是分离的。** 数据采集（轮询 HYDRA-UMC-SERVER、缓冲、批量写入）是一项与存储/查询截然不同的 I/O 密集型任务——将其保持为独立进程，意味着一次采集器重启或背压峰值不会触及数据湖自身的查询路径。
 * **为何 sink 写入失败会将该批次重新入队，而非直接丢弃——但那一条永远不会成功的样本除外。** `src/collector` 才是真正兑现「带缓冲的投递：零数据丢失」这一承诺的地方——`FlushOnce` 只有在 `Sink.Write` 确认后才会把已取出的批次从缓冲区中移除，出现传输层故障时会把它直接放回队首——真实的服务中断会重试同一批样本，而不是丢失它们。唯一的例外是 sink 自身永久拒绝为无效的样本（见下文 `sink.InvalidDataError`）——无条件将它重新入队，过去会让它永远停留在队首，阻塞它后面所有有效的样本；现在它会被隔离（丢弃，计入 `GET /stats` 的 `quarantined`），而批次中的其余部分仍会照常重新入队。不过缓冲区（`src/buffer`）仍然是有界的——如果中断持续时间超过其容量，确实会丢弃最旧的多余部分，这是一个真实、诚实的限制，而不是承诺无限内存。
 * **为何 CAN 和 WebSocket 都被解析为同一个 `Sample` 形态。** `src/telemetry` 在任何东西触及缓冲区或 sink 之前，就把这两种异构来源归一化为同一个结构体——这正是「CAN 总线上的电机电流尖峰与 Vision Node 的推理结果正确关联」背后的真实机制：下游任何阶段都无需知道某个样本最初是通过哪种协议到达的。
-* **除非给出契约中的表，否则 CAN 线路格式为何仍是本项目自己的 v0 约定。** 默认情况下采集器读取其自有 v0 格式的单字节信号码。使用 `-can-ids 文件`（SDK 的 `CanIds` 契约 `contracts/can_ids.json`，固件表所依据的同一份文档）时，帧按标识符分类：控制器板的健康帧（`slot_base + slot * slot_window + 0x11`）变为来源 `board-<slot>` 的 `board_health` 样本，其他已知帧和紧急停止只计数、不处理，契约未列出的标识符会被拒绝，绝不猜测。文件在读取时检查，错误的文件会阻止启动。这些都还没有在电路板上运行过。
+* **除非给出契约中的表，否则 CAN 线路格式为何仍是本项目自己的 v0 约定。** 默认情况下采集器读取其自有 v0 格式的单字节信号码。使用 `-can-ids 文件`（SDK 的 `CanIds` 契约 `contracts/can_ids.json`，固件表所依据的同一份文档）时，帧按标识符分类：控制器板的健康帧（`slot_base + slot * slot_window + 0x11`）变为来源 `board-<slot>` 的 `board_health` 样本，其他已知帧只计数、不处理，紧急停止帧变为来源 `stack` 的 `estop_frame` 样本（格式错误的会被标记，绝不丢弃），契约未列出的标识符会被拒绝，绝不猜测。文件在读取时检查，错误的文件会阻止启动。这些都还没有在电路板上运行过。
 * **为何 `DatalakeSink` 每个样本发送一次 HTTP 请求。** HYDRA-UMC-DATALAKE 的 `POST /ingest` 一次接收一个样本，所以"批量写入"实际上是按顺序发出的 N 个请求，遇到第一个失败就停止。`PartialWriteError` 会告知已确认多少个（`202`），只重试其余部分；被 sink 判定为无效（`400` 或 `413`）的样本是唯一被丢弃的，其后的样本会被重试。只有在 DATALAKE 已接受请求但应答丢失时才可能出现重复行，而 DATALAKE 对每个（来源、类型、字段、时间戳）只保留一个值，因此重发是覆盖而不是重复。
 * **它如何融入生态系统的其余部分。** HYDRA-UMC-DATALAKE 之下的兄弟服务：接收生产者通过 HTTP 推送给它的遥测数据，并写入共享的时序存储。它不会主动轮询任何东西，目前生态系统中也没有任何组件向它发送数据：生产者（订阅 Server 的机器人增量、CM5 上的 SocketCAN 读取器）仍有待编写。
 * **为何去重是一个独立的 `dedup` 包，以可选的 `Sequence` 为键，而非对样本自身内容做哈希。** 真实的重连会重发完全相同的字节，因此内容哈希对这种情况确实有效——但它也会悄悄吞掉两个碰巧所有字段都相同的、真正不同的样本（例如相隔一秒的两次 `0.0` 读数）。按生产者维护的序列号正是真实设备本就需要用来跟踪自身未确认消息的东西，因此复用它才是诚实、真实的信号——而不是从并不真正承诺唯一性的数据中猜测出来的东西。`Sequence == 0`/省略会使某个生产者完全选择退出去重，因此对于不发送该字段的设备，既有行为不会有任何变化。
@@ -156,7 +156,7 @@ flowchart LR
 
 ## 🧪 测试
 
-运行 `cd src && go test ./...` 会执行 196 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
+运行 `cd src && go test ./...` 会执行 201 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
 
 CI 运行 `HYDRA_UMC_CI=1 python tools/ci_validate.py`，检查清单、文档、八个 README 和图片。
 

@@ -8,7 +8,8 @@
 //	slot_base + slot*slot_window + offset  -> a message of a controller board; the health frame (HEALTH_FRAME) becomes a sample
 //	                                          "board_health" of the source "board-<slot>", every other known message is counted and
 //	                                          left alone (it is bus traffic of the firmware, not a reading)
-//	the emergency stop identifier          -> counted and left alone (its meaning is the business of the safety chain)
+//	the emergency stop identifier          -> with the estop_frame section of the contract a sample "estop_frame" of the source "stack" (see stop.go),
+//	                                          without it counted and left alone
 //	anything else                          -> refused: an identifier the contract does not know is not guessed at
 //
 // The table is checked when it is read with the rules of the contract (11-bit identifiers, offsets inside the window and used once,
@@ -59,13 +60,15 @@ type Message struct {
 }
 
 type document struct {
-	SchemaVersion string    `json:"schema_version"`
-	Note          string    `json:"note"`
-	EstopID       int       `json:"estop_id"`
-	SlotBase      int       `json:"slot_base"`
-	SlotWindow    int       `json:"slot_window"`
-	Slots         int       `json:"slots"`
-	Messages      []Message `json:"messages"`
+	SchemaVersion string           `json:"schema_version"`
+	Note          string           `json:"note"`
+	EstopID       int              `json:"estop_id"`
+	SlotBase      int              `json:"slot_base"`
+	SlotWindow    int              `json:"slot_window"`
+	Slots         int              `json:"slots"`
+	Messages      []Message        `json:"messages"`
+	EstopFrame    *estopSection    `json:"estop_frame"`
+	ToolHead      *toolHeadSection `json:"tool_head"`
 }
 
 // Table classifies identifiers.
@@ -75,6 +78,10 @@ type Table struct {
 	window   uint32
 	slots    uint32
 	byOffset map[uint32]Message
+	// the optional sections of the contract (stop.go)
+	estopKinds   map[int]string
+	estopSources map[string]int
+	toolHead     map[uint32]string
 	// Now is the clock of the samples (milliseconds); the tests replace it.
 	Now func() int64
 
@@ -145,6 +152,9 @@ func Parse(raw []byte) (*Table, error) {
 		}
 		t.byOffset[uint32(m.Offset)] = m
 	}
+	if err := t.readSections(doc); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
 
@@ -166,7 +176,10 @@ func (t *Table) IsStop(id uint32) bool { return id == t.estop }
 func (t *Table) Decode(id uint32, data []byte) (telemetry.Sample, error) {
 	if t.IsStop(id) {
 		t.stop.Add(1)
-		return telemetry.Sample{}, ErrIgnored
+		if t.estopKinds == nil {
+			return telemetry.Sample{}, ErrIgnored
+		}
+		return t.stopSample(data)
 	}
 	m, slot, ok := t.Classify(id)
 	if !ok {
