@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-138%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-167%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -35,7 +35,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | 版本 | `0.2.1` |
 | 成熟度 | 可用 |
-| 测试 | 138 (`go test ./...`) |
+| 测试 | 167 (`go test ./...`) |
 | 技术栈 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | 目标 | HYDRA-UMC 工作单元的 Raspberry Pi CM5 |
 | 真实硬件 | 不适用：这里的内容不在硬件上运行 |
@@ -51,7 +51,7 @@ GPL-3.0-or-later - see LICENSE
 | 领域 | 状态 | 在这里的含义 |
 |---|---|---|
 | 软件 | 🟡 | 主要用途可用；上面的诚实性检查列出了仍然缺少的内容 |
-| 测试 | 🟢 | 138 项自动测试，每次变更都会运行 |
+| 测试 | 🟢 | 167 项自动测试，每次变更都会运行 |
 | 真实硬件 | 🟢 | 不适用：这里的内容不在硬件上运行 |
 | 接口与协议 | 🟡 | 提供的路由或消息已有文档，并用客户端测试过；尚未被所有客户端使用 |
 | 集成 | 🟡 | 在 CM5 测试台上与其他服务一起运行，其消息遵循 SDK 的共享契约 |
@@ -156,7 +156,7 @@ flowchart LR
 
 ## 🧪 测试
 
-运行 `cd src && go test ./...` 会执行 138 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
+运行 `cd src && go test ./...` 会执行 167 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
 
 CI 运行 `HYDRA_UMC_CI=1 python tools/ci_validate.py`，检查清单、文档、八个 README 和图片。
 
@@ -230,6 +230,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── main.go                入口点：连接一切，启动 HTTP API
 │   ├── guard.go               启动守卫：除非设置了 Bearer 令牌，否则仅限回环
 │   ├── guard_test.go          仅限本机回环的启动保护测试
+│   ├── dockerfile_test.go     容器镜像文件的测试
 │   ├── mqttin/                把各 bridge 通过 MQTT 发出的内容 (状态、可用性) 转为遥测样本
 │   ├── telemetry/             Sample 类型 + CAN/WebSocket 解析器（归一化）
 │   ├── buffer/                带背压报告的有界 FIFO（Ring）
@@ -246,6 +247,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 ├── bump_version.py            显式提升版本
 ├── bump_manifest_version.py   将 hydra-umc.project.json 的版本与原生版本同步(--sync)
 ├── build.sh / build.bat       验证并构建（构建不会更改版本）
+├── Dockerfile                 容器镜像
 ├── run.sh / run.bat           真实运行：执行编译后的二进制文件
 ├── CHANGELOG.md               每个版本的变更
 ├── build-test.sh              不修改内容的构建检查

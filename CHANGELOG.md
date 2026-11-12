@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A Dockerfile of its own:** a two-stage image (the static binary built from `src/`, then a small runtime image) that runs as a user without root, listens on every interface on the port of the systemd unit (8092), declares a `/data` volume for the spool, keeps the token out of the image (it is passed in `HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN`, and the program still refuses a non-loopback address without one) and checks health by opening the port, because `GET /health` is closed unless the operator opens it. `src/dockerfile_test.go` (5 tests) checks that it copies files that exist, builds and starts the same binary, uses the port of the unit and holds no secret; the image itself is built only where Docker is available.
+
 ## [0.2.1] - The build test of the repository compiles only on CI or when allowed: for the stacks that compile (rust, go, android, flutter, firmware-c), tools/buildtest.py prints BUILDTEST=SKIPPED with exit status 2 on a plain PC, never a... (and 3 more changes)
 
 - **The build test of the repository compiles only on CI or when allowed:** for the stacks that compile (`rust`, `go`, `android`, `flutter`, `firmware-c`), `tools/build_test.py` prints `BUILD_TEST=SKIPPED` with exit status 2 on a plain PC, never a pass; `ALLOW_LOCAL_BUILD=1` allows it and a CI runner always may. The `python` and `node` stacks are not locked.

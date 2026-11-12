@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-138%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-167%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -35,7 +35,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Version | `0.2.1` |
 | Maturité | Fonctionnel |
-| Tests | 138 (`go test ./...`) |
+| Tests | 167 (`go test ./...`) |
 | Technologie | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | Cible | Le Raspberry Pi CM5 d'une cellule HYDRA-UMC |
 | Sur matériel réel | Sans objet : rien ici ne s'exécute sur du matériel |
@@ -51,7 +51,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 | Domaine | État | Ce que cela veut dire ici |
 |---|---|---|
 | Logiciel | 🟡 | Fonctionne pour son usage principal ; la vérification d'honnêteté ci-dessus liste ce qui manque encore |
-| Tests | 🟢 | 138 tests automatiques, exécutés à chaque modification |
+| Tests | 🟢 | 167 tests automatiques, exécutés à chaque modification |
 | Matériel réel | 🟢 | Sans objet : rien ici ne s'exécute sur du matériel |
 | Interface et protocoles | 🟡 | Les routes ou les messages proposés sont documentés et testés avec un client ; tous les clients ne les ont pas encore utilisés |
 | Intégration | 🟡 | Il fonctionne avec les autres services sur le banc d'essai CM5 et ses messages suivent les contrats partagés du SDK |
@@ -156,7 +156,7 @@ Nécessite Go 1.24 ou plus récent.
 
 ## 🧪 Tests
 
-138 tests automatiques s'exécutent avec `cd src && go test ./...`. Ils n'ont besoin ni de matériel ni de rien en dehors de cette machine.
+167 tests automatiques s'exécutent avec `cd src && go test ./...`. Ils n'ont besoin ni de matériel ni de rien en dehors de cette machine.
 
 La CI exécute `HYDRA_UMC_CI=1 python tools/ci_validate.py`, qui vérifie le manifeste, les documents, les huit README et les images.
 
@@ -233,6 +233,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── main.go                Point d'entrée : relie tout, démarre l'API HTTP
 │   ├── guard.go               Garde de démarrage : loopback uniquement sauf jeton Bearer
 │   ├── guard_test.go          Tests de la garde de démarrage en boucle locale seule
+│   ├── dockerfile_test.go     Tests du fichier de l'image de conteneur
 │   ├── mqttin/                Transforme ce que disent les bridges sur MQTT (état, disponibilité) en échantillons de télémétrie
 │   ├── telemetry/             Type Sample + analyseurs CAN/WebSocket (normalisation)
 │   ├── buffer/                File FIFO bornée signalant la contre-pression (Ring)
@@ -249,6 +250,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 ├── bump_version.py            Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)
 ├── bump_manifest_version.py   Synchronise la version de hydra-umc.project.json avec la version native (--sync)
 ├── build.sh / build.bat       Valide et compile (compiler ne change jamais la version)
+├── Dockerfile                 image de conteneur
 ├── run.sh / run.bat           Exécution réelle : lance le binaire compilé
 ├── CHANGELOG.md               ce qui a changé à chaque version
 ├── build-test.sh              vérification de build sans modification

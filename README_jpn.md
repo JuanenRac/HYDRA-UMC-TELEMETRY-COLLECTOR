@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-138%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-167%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -35,7 +35,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | バージョン | `0.2.1` |
 | 成熟度 | 機能する |
-| テスト | 138 (`go test ./...`) |
+| テスト | 167 (`go test ./...`) |
 | 技術 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | 対象 | HYDRA-UMC セルの Raspberry Pi CM5 |
 | 実機での確認 | 対象外：ここにあるものはハードウェア上では動きません |
@@ -51,7 +51,7 @@ GPL-3.0-or-later - see LICENSE
 | 領域 | 状態 | ここでの意味 |
 |---|---|---|
 | ソフトウェア | 🟡 | 主な目的では動作します。足りない点は上の正直さの確認に書かれています |
-| テスト | 🟢 | 自動テスト 138 件。変更のたびに実行されます |
+| テスト | 🟢 | 自動テスト 167 件。変更のたびに実行されます |
 | 実機 | 🟢 | 対象外：ここにあるものはハードウェア上では動きません |
 | インターフェースとプロトコル | 🟡 | 提供するルートやメッセージは文書化され、クライアントで試験済みです。すべてのクライアントがまだ使ったわけではありません |
 | 連携 | 🟡 | CM5 のテストベンチで他のサービスと一緒に動作し、メッセージは SDK の共通契約に従います |
@@ -156,7 +156,7 @@ Go 1.24 以上が必要です。
 
 ## 🧪 テスト
 
-`cd src && go test ./...` で自動テスト 138 件を実行します。 ハードウェアも、このマシンの外にあるものも必要ありません。
+`cd src && go test ./...` で自動テスト 167 件を実行します。 ハードウェアも、このマシンの外にあるものも必要ありません。
 
 CI は `HYDRA_UMC_CI=1 python tools/ci_validate.py` を実行し、マニフェスト、文書、8 つの README、図を検査します。
 
@@ -233,6 +233,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── main.go                エントリポイント：すべてを接続し、HTTP API を起動
 │   ├── guard.go               起動ガード：Bearer トークンがない限りループバックのみ
 │   ├── guard_test.go          ループバック限定の起動ガードのテスト
+│   ├── dockerfile_test.go     コンテナイメージファイルのテスト
 │   ├── mqttin/                ブリッジが MQTT で伝える内容 (状態、可用性) をテレメトリのサンプルに変換
 │   ├── telemetry/             Sample 型 + CAN/WebSocket パーサー(正規化)
 │   ├── buffer/                背圧を報告する有界 FIFO(Ring)
@@ -249,6 +250,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 ├── bump_version.py            明示的なバージョン更新
 ├── bump_manifest_version.py   hydra-umc.project.json のバージョンをネイティブ版と同期(--sync)
 ├── build.sh / build.bat       検証してビルド（ビルドはバージョンを変更しない）
+├── Dockerfile                 コンテナイメージ
 ├── run.sh / run.bat           実際の実行：コンパイル済みバイナリを実行
 ├── CHANGELOG.md               各バージョンの変更点
 ├── build-test.sh              変更を伴わないビルド確認

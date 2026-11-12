@@ -134,6 +134,19 @@
           }
         },
         {
+          "name": "dockerfile_test.go",
+          "desc": {
+            "en": "Tests of the container image file",
+            "es": "Pruebas del fichero de la imagen de contenedor",
+            "de": "Tests der Container-Image-Datei",
+            "fr": "Tests du fichier de l'image de conteneur",
+            "it": "Test del file dell'immagine di container",
+            "ja": "コンテナイメージファイルのテスト",
+            "zh": "容器镜像文件的测试",
+            "pt": "Testes do ficheiro da imagem de contentor"
+          }
+        },
+        {
           "name": "mqttin/",
           "desc": {
             "en": "Turns what the bridges say on MQTT",
@@ -546,6 +559,19 @@
             "ja": "検証してビルド（ビルドはバージョンを変更しない）",
             "zh": "验证并构建（构建不会更改版本）",
             "pt": "Valida e compila (compilar nunca altera a versão)"
+          }
+        },
+        {
+          "name": "Dockerfile",
+          "desc": {
+            "en": "container image",
+            "es": "imagen de contenedor",
+            "de": "Container-Image",
+            "fr": "image de conteneur",
+            "it": "immagine di container",
+            "ja": "コンテナイメージ",
+            "zh": "容器镜像",
+            "pt": "imagem de contentor"
           }
         },
         {
