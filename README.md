@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-167%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-196%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -35,7 +35,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Version | `0.2.1` |
 | Maturity | Functional |
-| Tests | 167 (`go test ./...`) |
+| Tests | 196 (`go test ./...`) |
 | Stack | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | Target | The Raspberry Pi CM5 of a HYDRA-UMC cell |
 | On real hardware | Not applicable: nothing here runs on hardware |
@@ -51,7 +51,7 @@ Each line is one part of this repository and the light says how far it is today.
 | Area | State | What it means here |
 |---|---|---|
 | Software | 🟡 | Works for its main purpose; the honesty check above lists what is still missing |
-| Tests | 🟢 | 167 automated tests, run on every change |
+| Tests | 🟢 | 196 automated tests, run on every change |
 | Real hardware | 🟢 | Not applicable: nothing here runs on hardware |
 | Interface and protocols | 🟡 | The routes or messages it offers are documented and tested with a client; not every client has used them yet |
 | Integration | 🟡 | It runs together with the other services on the CM5 test bench and its messages follow the shared contracts of the SDK |
@@ -68,7 +68,7 @@ Each line is one part of this repository and the light says how far it is today.
 It normalizes and de-duplicates heterogeneous inputs, so that readings such as a motor current spike on a CAN bus could later be correlated with other series (planned: correlation with AI inference results from a Vision Node; no such inference exists yet).
 
 ### Key Features:
-* 🚀 **Multi-Protocol Ingestion:** Handles CAN and WebSocket telemetry today, over a plain HTTP ingest API. *(gRPC ingestion is planned)*
+* 🚀 **Multi-Protocol Ingestion:** Handles CAN and WebSocket telemetry over a plain HTTP ingest API, and, when it is switched on (`-grpc-addr`, off by default), over gRPC (`TelemetryIngest` of the SDK, with an optional bearer token from a file and optional TLS or mutual TLS). gRPC and Protocol Buffers are the only third-party dependencies of the collector; everything else is the Go standard library.
 * ⚡ **Throughput:** built for the factory's telemetry, not for a bus capture: with the defaults the collector delivers up to 250 samples per second (a batch of 500 every 2 s, in one batch request towards HYDRA-UMC-DATALAKE, or one request per sample when that datalake has no batch route or with `-datalake-batch=false`); beyond that the buffer fills up and ingestion answers `503`.
 * 🧬 **Data Normalization:** Translates raw binary packets into a standardized JSON format. *(Protobuf output is planned, not implemented)*
 * 🛡️ **Buffered Delivery:** a sample the collector accepted is not discarded during an outage of the database or the network: the batch being delivered keeps its place, and a full buffer refuses new samples (`503`) instead of dropping old ones. The buffer lives in memory, so restarting the collector loses what it holds.
@@ -113,7 +113,7 @@ flowchart LR
 * **Why collection is separate from HYDRA-UMC-DATALAKE itself.** Collection (polling HYDRA-UMC-SERVER, buffering, batching writes) is an I/O-bound concern distinct from storage/query - keeping it a separate process means a collector restart or backpressure spike doesn't touch the datalake's own query path.
 * **Why a failed sink write requeues the batch instead of dropping it - except the one sample that will never succeed.** `src/collector` is what actually earns the "Buffered Delivery: zero data loss" claim: `FlushOnce` only removes a drained batch from the buffer once `Sink.Write` confirms it, and puts it straight back at the front on a transport-level failure - a real outage retries the same samples, it doesn't lose them. The one exception is a sample the sink itself PERMANENTLY rejected as invalid (see `sink.InvalidDataError` below) - requeuing that one unconditionally used to put it right back at the front forever, blocking every valid sample behind it; it's now quarantined (dropped, counted in `GET /stats`'s `quarantined`) instead, while the rest of the batch is still requeued normally. The buffer (`src/buffer`) is still bounded, though - an outage that outlasts its capacity does drop the oldest excess, a real, honest limit rather than a promise of infinite memory.
 * **Why CAN and WebSocket both parse into the same `Sample` shape.** `src/telemetry` normalizes both heterogeneous sources into one struct before anything touches the buffer or the sink - the actual mechanism behind "a motor current spike on CAN correctly correlated with a Vision Node result": neither downstream stage needs to know which protocol a sample arrived over.
-* **Why the CAN wire format is this project's own v0 convention, not the ecosystem's real CAN IDs yet.** The real CAN ID tables live in HYDRA-UMC's and URTC's own firmware docs - integrating against them for real is future work, not something to guess at without that reference open.
+* **Why the CAN wire format is this project's own v0 convention unless the table of the contract is given.** By default the collector reads the one-byte signal code of its own v0 format. With `-can-ids FILE` (the `CanIds` contract of the SDK, `contracts/can_ids.json`, the same document the firmware tables are written against) a frame is classified by its identifier: the health frame of a controller board (`slot_base + slot * slot_window + 0x11`) becomes a `board_health` sample of the source `board-<slot>`, other known frames and the emergency stop are counted and left alone, and an identifier the contract does not list is refused, never guessed at. The file is checked when it is read, so a wrong one stops the start. Nothing here has run against a board.
 * **Why `DatalakeSink` writes one sample per HTTP request.** HYDRA-UMC-DATALAKE's `POST /ingest` takes one sample, so a "batch write" is really N requests, in order, stopping at the first failure. `PartialWriteError` says how many were confirmed (`202`) and only the rest is retried; a sample the sink rejects as invalid (`400`, or `413`) is the only one discarded, and what comes after it is retried. A duplicate row can only appear if DATALAKE accepted a request and the answer was lost, and DATALAKE keeps one value per (source, kind, field, timestamp), so a resend overwrites instead of duplicating.
 * **How this fits the rest of the ecosystem.** A sibling service under HYDRA-UMC-DATALAKE: it receives the telemetry that producers push to it over HTTP and writes it into the shared time-series store. It does not poll anything, and nothing in the ecosystem sends it data yet: a producer (a subscription to the Server's robot deltas, a SocketCAN reader on the CM5) is still to be written.
 * **Why deduplication is a separate `dedup` package, keyed on an optional `Sequence`, not a hash of the sample's own content.** A real reconnect resends the identical bytes, so content-hashing would work for that case - but it would also silently swallow two genuinely different samples that happen to share every field (e.g. two `0.0` readings a second apart). A per-producer sequence number is what a real device already has to track its own unacked messages, so reusing it is the honest, real signal - not a guess derived from data that doesn't actually promise uniqueness. `Sequence == 0`/omitted opts a producer out entirely, so nothing about pre-existing behavior changed for a device that doesn't send one.
@@ -156,7 +156,7 @@ Requires Go 1.24 or newer.
 
 ## 🧪 Testing
 
-167 automated tests run with `cd src && go test ./...`. They need no hardware and nothing outside this machine.
+196 automated tests run with `cd src && go test ./...`. They need no hardware and nothing outside this machine.
 
 The CI runs `HYDRA_UMC_CI=1 python tools/ci_validate.py`, which checks the manifest, the documents, the eight READMEs and the pictures.
 
@@ -233,8 +233,10 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── guard.go               Startup guard: loopback-only unless a bearer token is set
 │   ├── guard_test.go          Tests of the loopback-only start-up guard
 │   ├── dockerfile_test.go     Tests of the container image file
+│   ├── grpcin/                gRPC ingest of the SDK service TelemetryIngest (bearer token, TLS, mutual TLS), off by default; pb/ holds the generated code
 │   ├── mqttin/                Turns what the bridges say on MQTT (state, availability) into telemetry samples
 │   ├── telemetry/             Sample type + CAN/WebSocket parsers (normalization)
+│   ├── canids/                CAN identifiers read from the CanIds contract of the SDK: the health frame of a controller board becomes a sample, other known frames are left alone
 │   ├── buffer/                Bounded, backpressure-reporting FIFO (Ring)
 │   ├── dedup/                 Real per-producer sequence deduplication (reorder window)
 │   ├── collector/             Orchestrates ingest+flush, retries on sink failure, dedup

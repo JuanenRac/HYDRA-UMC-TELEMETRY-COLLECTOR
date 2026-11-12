@@ -147,6 +147,29 @@
           }
         },
         {
+          "name": "grpcin/",
+          "desc": {
+            "en": "gRPC ingest (TelemetryIngest), off by default",
+            "es": "Ingesta gRPC (TelemetryIngest), apagada por defecto",
+            "de": "gRPC-Ingest (TelemetryIngest), standardmäßig aus",
+            "fr": "Ingestion gRPC (TelemetryIngest), désactivée par défaut",
+            "it": "Ingestione gRPC (TelemetryIngest), spenta per impostazione predefinita",
+            "ja": "gRPC 取り込み (TelemetryIngest)、既定ではオフ",
+            "zh": "gRPC 摄取 (TelemetryIngest)，默认关闭",
+            "pt": "Ingestão gRPC (TelemetryIngest), desligada por predefinição"
+          },
+          "tree_desc": {
+            "en": "gRPC ingest of the SDK service TelemetryIngest (bearer token, TLS, mutual TLS), off by default; pb/ holds the generated code",
+            "es": "Ingesta gRPC del servicio TelemetryIngest del SDK (token de portador, TLS, TLS mutuo), apagada por defecto; pb/ guarda el código generado",
+            "de": "gRPC-Ingest des SDK-Dienstes TelemetryIngest (Bearer-Token, TLS, gegenseitiges TLS), standardmäßig aus; pb/ enthält den erzeugten Code",
+            "fr": "Ingestion gRPC du service TelemetryIngest du SDK (jeton porteur, TLS, TLS mutuel), désactivée par défaut ; pb/ garde le code généré",
+            "it": "Ingestione gRPC del servizio TelemetryIngest dell'SDK (token bearer, TLS, TLS reciproco), spenta per impostazione predefinita; pb/ contiene il codice generato",
+            "ja": "SDK のサービス TelemetryIngest の gRPC 取り込み (ベアラートークン、TLS、相互 TLS)、既定ではオフ。pb/ は生成コード",
+            "zh": "SDK 服务 TelemetryIngest 的 gRPC 摄取（Bearer 令牌、TLS、双向 TLS），默认关闭；pb/ 存放生成的代码",
+            "pt": "Ingestão gRPC do serviço TelemetryIngest do SDK (token de portador, TLS, TLS mútuo), desligada por predefinição; pb/ guarda o código gerado"
+          }
+        },
+        {
           "name": "mqttin/",
           "desc": {
             "en": "Turns what the bridges say on MQTT",
@@ -190,6 +213,29 @@
             "ja": "Sample 型 + CAN/WebSocket パーサー(正規化)",
             "zh": "Sample 类型 + CAN/WebSocket 解析器（归一化）",
             "pt": "Tipo Sample + analisadores CAN/WebSocket (normalização)"
+          }
+        },
+        {
+          "name": "canids/",
+          "desc": {
+            "en": "CAN identifiers read from the CanIds contract",
+            "es": "Identificadores CAN leídos del contrato CanIds",
+            "de": "CAN-Kennungen aus dem Vertrag CanIds",
+            "fr": "Identifiants CAN lus du contrat CanIds",
+            "it": "Identificatori CAN letti dal contratto CanIds",
+            "ja": "CanIds 契約から読む CAN 識別子",
+            "zh": "从 CanIds 契约读取的 CAN 标识符",
+            "pt": "Identificadores CAN lidos do contrato CanIds"
+          },
+          "tree_desc": {
+            "en": "CAN identifiers read from the CanIds contract of the SDK: the health frame of a controller board becomes a sample, other known frames are left alone",
+            "es": "Identificadores CAN leídos del contrato CanIds del SDK: la trama de salud de una placa controladora pasa a ser una muestra, las demás tramas conocidas se dejan",
+            "de": "CAN-Kennungen aus dem Vertrag CanIds des SDK: der Health-Frame einer Controller-Platine wird zur Probe, andere bekannte Frames bleiben unberührt",
+            "fr": "Identifiants CAN lus du contrat CanIds du SDK : la trame de santé d'une carte contrôleur devient un échantillon, les autres trames connues sont laissées",
+            "it": "Identificatori CAN letti dal contratto CanIds dell'SDK: il frame di salute di una scheda controller diventa un campione, gli altri frame noti restano",
+            "ja": "SDK の CanIds 契約から読む CAN 識別子。コントローラー基板のヘルスフレームはサンプルになり、他の既知フレームはそのまま",
+            "zh": "从 SDK 的 CanIds 契约读取的 CAN 标识符：控制器板的健康帧变为样本，其他已知帧不处理",
+            "pt": "Identificadores CAN lidos do contrato CanIds do SDK: a trama de saúde de uma placa controladora passa a amostra, as outras tramas conhecidas ficam como estão"
           }
         },
         {

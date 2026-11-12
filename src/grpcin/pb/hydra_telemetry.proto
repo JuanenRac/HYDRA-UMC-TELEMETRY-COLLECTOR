@@ -1,0 +1,37 @@
+// =============================================================================
+// HYDRA-UMC-SDK - contracts/proto/hydra_telemetry.proto
+// Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
+// GPL-3.0-or-later - see LICENSE
+// =============================================================================
+// The telemetry ingest of HYDRA-UMC-TELEMETRY-COLLECTOR over gRPC: the same Sample as the HTTP ingest route
+// (POST /ingest), with the same rules (a source id and a kind, a plausible time in milliseconds, finite numbers).
+// The collector keeps a generated copy; this file is the source.
+
+syntax = "proto3";
+
+package hydra.telemetry.v1;
+
+option go_package = "github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/grpcin/pb;pb";
+
+// One normalized reading.
+message Sample {
+  string source_id = 1;            // e.g. "robot-1", "vision-node-1"
+  string kind = 2;                 // e.g. "motor_current"
+  int64 timestamp_ms = 3;          // unix milliseconds
+  map<string, double> fields = 4;  // open key/value numbers
+  uint64 sequence = 5;             // optional per-producer counter; 0 means "not provided"
+}
+
+// What happened to the samples of one call.
+message PushAck {
+  uint32 accepted = 1;
+  uint32 rejected = 2;
+  string first_error = 3;  // the reason of the first rejected sample, empty when none was
+}
+
+service TelemetryIngest {
+  // One sample. A sample that does not pass the rules is answered with the status INVALID_ARGUMENT.
+  rpc Push(Sample) returns (PushAck);
+  // Many samples on one stream. A bad sample is counted in the answer and the stream goes on.
+  rpc PushStream(stream Sample) returns (PushAck);
+}

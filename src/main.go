@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -32,8 +33,10 @@ import (
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/anomaly"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/api"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/canids"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/downsample"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/grpcin"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/mqttin"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/spool"
@@ -80,6 +83,13 @@ func main() {
 	anomalyPlain := flag.Bool("anomaly-allow-plaintext", false, "allow the detector token over plain http to a host that is not on this machine")
 	identityKeyFile := flag.String("identity-key-file", os.Getenv(identityKeyFileEnv), "file with the signing key of HYDRA-UMC-SERVER (its JWT_SECRET): a valid token of the SERVER is then accepted next to the tokens, every route (/stats, /metrics and GET /health too) demands an identity and a viewer may read but not ingest; off by default (default: $"+identityKeyFileEnv+")")
 	healthOpen := flag.Bool("health-open", healthOpenFromEnv(), "open GET /health (default: $"+healthOpenEnv+"); closed it answers 404; open it answers a caller on loopback, and any other caller needs the ingest or metrics token")
+	canIDsFile := flag.String("can-ids", "", "CanIds contract of the SDK (contracts/can_ids.json): POST /ingest/can then reads the identifiers of the HYDRA-UMC stack bus (a health frame of a controller board becomes a sample, other known frames are left alone, an unknown identifier is refused) instead of the v0 convention; empty keeps the v0 convention")
+	grpcAddr := flag.String("grpc-addr", "", "address for the gRPC ingest (TelemetryIngest of the SDK), for example 127.0.0.1:8093; empty leaves gRPC off")
+	grpcTokenFile := flag.String("grpc-token-file", "", "file whose first line is the bearer token a gRPC caller must send (at least 16 characters); empty requires none")
+	grpcCert := flag.String("grpc-tls-cert", "", "PEM certificate that turns TLS on for the gRPC ingest (with -grpc-tls-key)")
+	grpcKey := flag.String("grpc-tls-key", "", "PEM private key of -grpc-tls-cert")
+	grpcClientCA := flag.String("grpc-client-ca", "", "PEM authority that must have signed the certificate of a gRPC caller (mutual TLS; needs -grpc-tls-cert)")
+	grpcAnonymous := flag.Bool("grpc-allow-anonymous", false, "allow a gRPC listener beyond loopback with no token and no client certificate, or a token in clear text")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
 
@@ -137,6 +147,29 @@ func main() {
 		os.Exit(2)
 	}
 
+	grpcOptions := grpcin.Options{Addr: *grpcAddr, CertFile: *grpcCert, KeyFile: *grpcKey, ClientCAFile: *grpcClientCA, AllowAnonymous: *grpcAnonymous}
+	if *grpcAddr != "" && *grpcTokenFile != "" {
+		token, err := grpcin.ReadToken(*grpcTokenFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] -grpc-token-file: "+err.Error())
+			os.Exit(2)
+		}
+		grpcOptions.Token = token
+	}
+	if *grpcAddr == "" && (*grpcTokenFile != "" || *grpcCert != "" || *grpcKey != "" || *grpcClientCA != "") {
+		fmt.Fprintln(os.Stderr, "[telemetry-collector] the -grpc-* options need -grpc-addr (the gRPC ingest is off without it)")
+		os.Exit(2)
+	}
+	var canTable *canids.Table
+	if *canIDsFile != "" {
+		table, err := canids.Load(*canIDsFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] -can-ids: "+err.Error())
+			os.Exit(2)
+		}
+		canTable = table
+	}
+
 	fmt.Printf("%s v%s\n", projectName, Version)
 	fmt.Println(role)
 
@@ -161,6 +194,20 @@ func main() {
 		fmt.Printf("[telemetry-collector] streaming %d signal(s) to the anomaly detector at %s\n", len(anomalyTable), *anomalyURL)
 	}
 	c := collector.New(*bufferCap, s)
+	var grpcServer *grpcin.Server
+	if *grpcAddr != "" {
+		grpcOptions.Submit = c.IngestSample
+		srv, err := grpcin.New(grpcOptions)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] "+err.Error())
+			os.Exit(2)
+		}
+		grpcServer = srv
+	}
+	if canTable != nil {
+		c.SetCANTable(canTable)
+		fmt.Printf("[telemetry-collector] reading CAN frames with the identifiers of %s\n", *canIDsFile)
+	}
 	if *spoolPath != "" {
 		sp, err := spool.Open(*spoolPath, *spoolMax)
 		if err != nil {
@@ -190,6 +237,12 @@ func main() {
 				extra[key] = value
 			}
 		}
+		if canTable != nil {
+			extra["can"] = canTable.Counters()
+		}
+		if grpcServer != nil {
+			extra["grpc"] = grpcServer.Stats()
+		}
 		if len(extra) == 0 {
 			return nil
 		}
@@ -200,6 +253,30 @@ func main() {
 	defer stop()
 
 	go c.Run(ctx, *flushInterval, *batchSize)
+	if grpcServer != nil {
+		listener, err := net.Listen("tcp", *grpcAddr)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] gRPC: "+err.Error())
+			os.Exit(2)
+		}
+		security := "no TLS"
+		if *grpcCert != "" {
+			security = "TLS"
+			if *grpcClientCA != "" {
+				security = "mutual TLS"
+			}
+		}
+		fmt.Printf("[telemetry-collector] gRPC ingest listening on %s (%s, token %t): TelemetryIngest.Push and PushStream\n", listener.Addr(), security, grpcOptions.Token != "")
+		go func() {
+			if err := grpcServer.Serve(listener); err != nil {
+				log.Printf("gRPC ingest stopped: %v", err)
+			}
+		}()
+		go func() {
+			<-ctx.Done()
+			grpcServer.GracefulStop()
+		}()
+	}
 	if anomalyPub != nil {
 		go anomalyPub.Run(ctx)
 	}

@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "note": "The identifiers of the stack bus of HYDRA-UMC (STACK A). A message of a controller board has the identifier slot_base + slot * slot_window + offset; the emergency stop is one identifier for the whole stack, below every slot. Each identifier has one emitter. The firmware, its host tools and HYDRA-UMC-TELEMETRY-COLLECTOR read this document; nothing here has run on a board.",
+  "estop_id": 1,
+  "slot_base": 1536,
+  "slot_window": 64,
+  "slots": 8,
+  "messages": [
+    {
+      "name": "BOOT_PAGE_ACK",
+      "offset": 3,
+      "emitter": "bootloader"
+    },
+    {
+      "name": "BOOT_STATUS",
+      "offset": 5,
+      "emitter": "bootloader"
+    },
+    {
+      "name": "RELAY_REQUEST",
+      "offset": 16,
+      "emitter": "kinematic-brain"
+    },
+    {
+      "name": "HEALTH_FRAME",
+      "offset": 17,
+      "emitter": "controller-board"
+    },
+    {
+      "name": "RELAY_REQUEST_EXTRA",
+      "offset": 19,
+      "emitter": "kinematic-brain"
+    },
+    {
+      "name": "RELAY_RESPONSE",
+      "offset": 22,
+      "emitter": "controller-board"
+    },
+    {
+      "name": "POLL_STATUS",
+      "offset": 23,
+      "emitter": "host"
+    },
+    {
+      "name": "RELAY_RESPONSE_EXTRA",
+      "offset": 24,
+      "emitter": "controller-board"
+    },
+    {
+      "name": "BOOT_IMAGE_HEADER",
+      "offset": 25,
+      "emitter": "host"
+    },
+    {
+      "name": "BOOT_DOWNGRADE_NONCE_REQUEST",
+      "offset": 26,
+      "emitter": "host"
+    },
+    {
+      "name": "BOOT_DOWNGRADE_TOKEN",
+      "offset": 27,
+      "emitter": "host"
+    },
+    {
+      "name": "BOOT_DOWNGRADE_NONCE_RESPONSE",
+      "offset": 28,
+      "emitter": "bootloader"
+    },
+    {
+      "name": "ESTOP_STATE",
+      "offset": 29,
+      "emitter": "controller-board"
+    },
+    {
+      "name": "SLOT_SCAN_PROBE",
+      "offset": 30,
+      "emitter": "host"
+    },
+    {
+      "name": "SLOT_SCAN_REPLY",
+      "offset": 31,
+      "emitter": "bootloader"
+    },
+    {
+      "name": "FRAM_ERASE_REQUEST",
+      "offset": 32,
+      "emitter": "host"
+    },
+    {
+      "name": "FRAM_ERASE_RESPONSE",
+      "offset": 33,
+      "emitter": "bootloader"
+    },
+    {
+      "name": "FRAM_SELFTEST_REQUEST",
+      "offset": 34,
+      "emitter": "host"
+    },
+    {
+      "name": "FRAM_SELFTEST_RESPONSE",
+      "offset": 35,
+      "emitter": "bootloader"
+    }
+  ]
+}

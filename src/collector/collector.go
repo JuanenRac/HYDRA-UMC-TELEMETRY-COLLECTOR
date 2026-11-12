@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/buffer"
+	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/canids"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/dedup"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/downsample"
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/sink"
@@ -107,6 +108,9 @@ type Collector struct {
 	maxFlushNanos     atomic.Int64
 
 	spool *spool.File
+
+	// canTable, when set, makes IngestCAN read the identifiers of the CanIds contract instead of the v0 convention.
+	canTable *canids.Table
 
 	agg   *downsample.Aggregator
 	aggMu sync.Mutex
@@ -232,11 +236,32 @@ func New(bufferCapacity int, s sink.Sink) *Collector {
 	}
 }
 
+// SetCANTable makes IngestCAN classify frames by the identifiers of the CanIds contract (see package canids); nil keeps the v0
+// convention of telemetry.ParseCANFrame. Call it before the collector runs.
+func (c *Collector) SetCANTable(t *canids.Table) { c.canTable = t }
+
 // IngestCAN parses a raw CAN frame and buffers it. Returns the buffer's
 // own ErrFull if there's no room - a real backpressure signal the HTTP
 // layer (api.go) turns into a 503, not a silently dropped sample.
 func (c *Collector) IngestCAN(arbitrationID uint32, data []byte) error {
+	if c.canTable != nil {
+		return c.ingestContractCAN(arbitrationID, data)
+	}
 	s, err := telemetry.ParseCANFrame(arbitrationID, data)
+	if err != nil {
+		c.ingestErrors.Add(1)
+		return err
+	}
+	return c.ingest(s)
+}
+
+// ingestContractCAN reads a frame with the table of the contract: a reading is buffered, known traffic that is not a reading is
+// accepted and left alone (counted by the table), and an identifier the contract does not list or a wrong payload is an error.
+func (c *Collector) ingestContractCAN(arbitrationID uint32, data []byte) error {
+	s, err := c.canTable.Decode(arbitrationID, data)
+	if errors.Is(err, canids.ErrIgnored) {
+		return nil
+	}
 	if err != nil {
 		c.ingestErrors.Add(1)
 		return err

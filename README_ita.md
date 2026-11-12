@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-167%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-196%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -35,7 +35,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Versione | `0.2.1` |
 | Maturità | Funzionale |
-| Test | 167 (`go test ./...`) |
+| Test | 196 (`go test ./...`) |
 | Tecnologia | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | Destinazione | Il Raspberry Pi CM5 di una cella HYDRA-UMC |
 | Su hardware reale | Non applicabile: nulla qui gira su hardware |
@@ -51,7 +51,7 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 | Area | Stato | Cosa significa qui |
 |---|---|---|
 | Software | 🟡 | Funziona per il suo scopo principale; la verifica di onestà qui sopra elenca ciò che manca ancora |
-| Test | 🟢 | 167 test automatici, eseguiti a ogni modifica |
+| Test | 🟢 | 196 test automatici, eseguiti a ogni modifica |
 | Hardware reale | 🟢 | Non applicabile: nulla qui gira su hardware |
 | Interfaccia e protocolli | 🟡 | Le rotte o i messaggi offerti sono documentati e provati con un client; non tutti i client li hanno ancora usati |
 | Integrazione | 🟡 | Funziona insieme agli altri servizi sul banco prova CM5 e i suoi messaggi seguono i contratti condivisi dell'SDK |
@@ -68,7 +68,7 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 Normalizza e deduplica ingressi eterogenei, così che misure come un picco di corrente di un motore su un bus CAN possano essere correlate in seguito con altre serie (previsto: correlazione con risultati di inferenza IA di un Vision Node; tale inferenza non esiste ancora).
 
 ### Caratteristiche principali:
-* 🚀 **Ingestione multi-protocollo:** Gestisce la telemetria CAN e WebSocket oggi, tramite una semplice API di ingestione HTTP. *(l'ingestione gRPC è pianificata)*
+* 🚀 **Ingestione multi-protocollo:** Gestisce la telemetria CAN e WebSocket tramite una semplice API di ingestione HTTP e, se attivata (`-grpc-addr`, spenta per impostazione predefinita), tramite gRPC (`TelemetryIngest` dell'SDK, con token bearer facoltativo da file e TLS o TLS reciproco facoltativi). gRPC e Protocol Buffers sono le uniche dipendenze di terze parti del collettore; tutto il resto è la libreria standard di Go.
 * ⚡ **Throughput:** pensato per la telemetria della fabbrica, non per catturare un bus: con i valori predefiniti il collector consegna fino a 250 campioni al secondo (un lotto da 500 ogni 2 s, in un'unica richiesta per lotto verso HYDRA-UMC-DATALAKE, oppure una richiesta per campione se quel datalake non ha la rotta dei lotti o con `-datalake-batch=false`); oltre, il buffer si riempie e l'ingestione risponde `503`.
 * 🧬 **Normalizzazione dei dati:** Traduce i pacchetti binari grezzi in un formato JSON standardizzato. *(l'output Protobuf è pianificato, non implementato)*
 * 🛡️ **Consegna con buffer:** un campione che il collector ha accettato non viene scartato durante un'interruzione del database o della rete: il lotto in consegna mantiene il suo posto e un buffer pieno rifiuta i campioni nuovi (`503`) invece di scartare quelli vecchi. Il buffer è in memoria: riavviare il collector ne fa perdere il contenuto.
@@ -113,7 +113,7 @@ flowchart LR
 * **Perché la raccolta è separata da HYDRA-UMC-DATALAKE stesso.** La raccolta (interrogare HYDRA-UMC-SERVER, bufferizzare, raggruppare le scritture) è una preoccupazione legata all'I/O distinta da storage/query - tenerla come processo separato significa che un riavvio del collettore o un picco di contropressione non tocca il percorso di query proprio del data lake.
 * **Perché un fallimento di scrittura nel sink rimette in coda il lotto invece di scartarlo - tranne l'unico campione che non avrà mai successo.** `src/collector` è ciò che sostiene davvero la promessa "Consegna con Buffer: zero perdita di dati": `FlushOnce` rimuove un lotto dal buffer solo quando `Sink.Write` lo conferma, e lo rimette proprio in testa in caso di fallimento di trasporto - un'interruzione reale riprova gli stessi campioni, non li perde. L'unica eccezione è un campione che il sink stesso ha rifiutato in modo PERMANENTE come non valido (vedi `sink.InvalidDataError` più sotto) - rimetterlo in coda incondizionatamente lo riportava in testa per sempre, bloccando ogni campione valido dietro di esso; ora viene invece messo in quarantena (scartato, conteggiato nel `quarantined` di `GET /stats`), mentre il resto del lotto continua a essere rimesso in coda normalmente. Il buffer (`src/buffer`) resta comunque limitato - un'interruzione che dura più della sua capacità SCARTA davvero l'eccesso più vecchio, un limite reale e onesto invece di promettere memoria infinita.
 * **Perché CAN e WebSocket vengono entrambi analizzati nella stessa forma `Sample`.** `src/telemetry` normalizza entrambe le fonti eterogenee in un'unica struttura prima che qualsiasi cosa tocchi il buffer o il sink - il vero meccanismo dietro "un picco di corrente motore su CAN correttamente correlato con un risultato di un Vision Node": nessuna fase successiva deve sapere da quale protocollo è arrivato un campione.
-* **Perché il formato dei frame CAN è una convenzione propria v0 di questo progetto, non ancora i veri ID CAN dell'ecosistema.** Le vere tabelle di ID CAN vivono nella documentazione firmware propria di HYDRA-UMC e URTC - integrarsi davvero con esse è lavoro futuro, non qualcosa da indovinare senza quel riferimento davanti.
+* **Perché il formato dei frame CAN resta la convenzione propria v0 di questo progetto finché non si indica la tabella del contratto.** Per impostazione predefinita il collettore legge il codice di segnale di un byte del proprio formato v0. Con `-can-ids FILE` (il contratto `CanIds` dell'SDK, `contracts/can_ids.json`, lo stesso documento su cui si scrivono le tabelle del firmware) un frame viene classificato dal suo identificatore: il frame di salute di una scheda controller (`slot_base + slot * slot_window + 0x11`) diventa un campione `board_health` della sorgente `board-<slot>`, gli altri frame noti e l'arresto di emergenza vengono contati e lasciati stare, e un identificatore che il contratto non elenca viene rifiutato, mai indovinato. Il file viene controllato alla lettura, quindi uno sbagliato impedisce l'avvio. Nulla di tutto ciò è girato su una scheda.
 * **Perché `DatalakeSink` scrive un campione per richiesta HTTP.** Il `POST /ingest` di HYDRA-UMC-DATALAKE riceve un campione, quindi una "scrittura a lotti" sono in realtà N richieste, in ordine, che si fermano al primo errore. `PartialWriteError` dice quante sono state confermate (`202`) e si ritenta solo il resto; un campione che il sink rifiuta come non valido (`400` o `413`) è l'unico scartato, e ciò che lo segue viene ritentato. Una riga duplicata può comparire solo se DATALAKE ha accettato una richiesta e la risposta si è persa, e DATALAKE conserva un valore per (sorgente, tipo, campo, timestamp): un nuovo invio sovrascrive invece di duplicare.
 * **Come si inserisce nel resto dell'ecosistema.** Un servizio fratello sotto HYDRA-UMC-DATALAKE: riceve la telemetria che i produttori gli inviano via HTTP e la scrive nell'archivio condiviso di serie temporali. Non interroga nulla, e per ora nulla nell'ecosistema gli invia dati: resta da scrivere un produttore (una sottoscrizione ai delta dei robot del Server, un lettore SocketCAN sulla CM5).
 * **Perché la deduplicazione è un package `dedup` separato, indicizzato su un `Sequence` opzionale, non un hash del contenuto stesso del campione.** Una riconnessione reale reinvia gli stessi identici byte, quindi l'hashing del contenuto funzionerebbe per quel caso - ma inghiottirebbe anche silenziosamente due campioni genuinamente diversi che per caso condividono tutti i campi (ad es. due letture di `0.0` a un secondo di distanza). Un numero di sequenza per produttore è ciò che un dispositivo reale deve già tracciare per i propri messaggi non confermati, quindi riutilizzarlo è il segnale onesto e reale - non una supposizione derivata da dati che in realtà non promettono unicità. `Sequence == 0`/omesso esclude completamente un produttore, quindi nulla del comportamento preesistente cambia per un dispositivo che non ne invia uno.
@@ -156,7 +156,7 @@ Richiede Go 1.24 o successivo.
 
 ## 🧪 Test
 
-167 test automatici si eseguono con `cd src && go test ./...`. Non richiedono hardware né nulla al di fuori di questa macchina.
+196 test automatici si eseguono con `cd src && go test ./...`. Non richiedono hardware né nulla al di fuori di questa macchina.
 
 La CI esegue `HYDRA_UMC_CI=1 python tools/ci_validate.py`, che controlla il manifesto, i documenti, gli otto README e le immagini.
 
@@ -234,8 +234,10 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 │   ├── guard.go               Guardia di avvio: solo loopback salvo token Bearer
 │   ├── guard_test.go          Test della guardia di avvio solo loopback
 │   ├── dockerfile_test.go     Test del file dell'immagine di container
+│   ├── grpcin/                Ingestione gRPC del servizio TelemetryIngest dell'SDK (token bearer, TLS, TLS reciproco), spenta per impostazione predefinita; pb/ contiene il codice generato
 │   ├── mqttin/                Trasforma ciò che i bridge dicono su MQTT (stato, disponibilità) in campioni di telemetria
 │   ├── telemetry/             Tipo Sample + parser CAN/WebSocket (normalizzazione)
+│   ├── canids/                Identificatori CAN letti dal contratto CanIds dell'SDK: il frame di salute di una scheda controller diventa un campione, gli altri frame noti restano
 │   ├── buffer/                FIFO limitato con segnalazione di contropressione (Ring)
 │   ├── dedup/                 Deduplicazione reale per sequenza per produttore (finestra di riordino)
 │   ├── collector/             Orchestra ingestione+flush, riprova se il sink fallisce, dedup
