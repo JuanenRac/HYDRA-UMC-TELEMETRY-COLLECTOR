@@ -339,3 +339,30 @@ func TestTheOptionalSectionsAreCheckedWhenTheyArePresent(t *testing.T) {
 		}
 	}
 }
+
+func TestTheToolHeadBusRateComesFromTheContract(t *testing.T) {
+	rate, legacy := load(t).ToolHeadBitRate()
+	if rate != 1_000_000 || legacy != 500_000 {
+		t.Fatalf("%d %d", rate, legacy)
+	}
+	noHead, _ := Parse(contract(func(d map[string]any) { delete(d, "tool_head") }))
+	if r, l := noHead.ToolHeadBitRate(); r != 0 || l != 0 {
+		t.Fatalf("%d %d", r, l)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"rate too low":    func(d map[string]any) { d["tool_head"].(map[string]any)["bit_rate_bps"] = 100 },
+		"rate too high":   func(d map[string]any) { d["tool_head"].(map[string]any)["bit_rate_bps"] = 5_000_000 },
+		"legacy too high": func(d map[string]any) { d["tool_head"].(map[string]any)["legacy_bit_rate_bps"] = 5_000_000 },
+	} {
+		if _, err := Parse(contract(mutate)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	withoutLegacy, err := Parse(contract(func(d map[string]any) { delete(d["tool_head"].(map[string]any), "legacy_bit_rate_bps") }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, l := withoutLegacy.ToolHeadBitRate(); r != 1_000_000 || l != 0 {
+		t.Fatalf("%d %d", r, l)
+	}
+}

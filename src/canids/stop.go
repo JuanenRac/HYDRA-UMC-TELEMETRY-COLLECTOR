@@ -35,6 +35,7 @@ type toolHeadSection struct {
 	Source          string            `json:"source"`
 	ProtocolVersion int               `json:"protocol_version"`
 	BitRateBps      int               `json:"bit_rate_bps"`
+	LegacyBitRate   int               `json:"legacy_bit_rate_bps"`
 	Bus             string            `json:"bus"`
 	Messages        []toolHeadMessage `json:"messages"`
 }
@@ -76,6 +77,10 @@ func (t *Table) readSections(doc document) error {
 		t.estopSources = s
 	}
 	if head := doc.ToolHead; head != nil {
+		if head.BitRateBps < 10000 || head.BitRateBps > 1000000 || head.LegacyBitRate < 0 || head.LegacyBitRate > 1000000 {
+			return errors.New("tool_head: a bit rate is out of range")
+		}
+		t.toolHeadRate, t.toolHeadLegacyRate = head.BitRateBps, head.LegacyBitRate
 		if head.Bus != "tool_head_downlink" || len(head.Messages) == 0 || len(head.Messages) > 512 {
 			return errors.New("tool_head is not the section of the tool head bus")
 		}
@@ -91,6 +96,10 @@ func (t *Table) readSections(doc document) error {
 	}
 	return nil
 }
+
+// ToolHeadBitRate is the bit rate of the tool head bus that the contract gives (0 when the section is missing) and the legacy rate it keeps for heads
+// that were not updated (0 when it gives none). The reader of the bus does not choose a rate: the number comes from the file.
+func (t *Table) ToolHeadBitRate() (rate, legacy int) { return t.toolHeadRate, t.toolHeadLegacyRate }
 
 // ToolHeadName is the name the contract gives to an identifier of the tool head bus ("" when it has none or the section is missing).
 func (t *Table) ToolHeadName(id uint32) string { return t.toolHead[id] }

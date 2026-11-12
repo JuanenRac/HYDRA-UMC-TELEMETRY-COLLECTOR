@@ -79,9 +79,10 @@ type Table struct {
 	slots    uint32
 	byOffset map[uint32]Message
 	// the optional sections of the contract (stop.go)
-	estopKinds   map[int]string
-	estopSources map[string]int
-	toolHead     map[uint32]string
+	estopKinds                       map[int]string
+	estopSources                     map[string]int
+	toolHead                         map[uint32]string
+	toolHeadRate, toolHeadLegacyRate int
 	// Now is the clock of the samples (milliseconds); the tests replace it.
 	Now func() int64
 

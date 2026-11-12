@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "note": "The identifiers of the stack bus of HYDRA-UMC (STACK A), of the tool head bus of URTC and the frame of the emergency stop. A message of a controller board has the identifier slot_base + slot * slot_window + offset; the emergency stop is one identifier for the whole stack, below every slot; the tool head messages are on the downlink bus of a controller board, not on STACK A, and their numbers are those of the URTC protocol (spec/can_protocol.json of URTC-COMMON). Each identifier has one emitter. The firmware, its host tools and HYDRA-UMC-TELEMETRY-COLLECTOR read this document; nothing here has run on a board.",
+  "note": "The identifiers of the stack bus of HYDRA-UMC (STACK A), of the tool head bus of URTC and the frame of the emergency stop. A message of a controller board has the identifier slot_base + slot * slot_window + offset; the emergency stop is one identifier for the whole stack, below every slot; the tool head messages are on the downlink bus of a controller board, not on STACK A, and their numbers are those of the URTC protocol (spec/can_protocol.json of URTC-COMMON). Each identifier has one emitter. The firmware, its host tools and HYDRA-UMC-TELEMETRY-COLLECTOR read this document; nothing here has run on a board. The tool head bus runs at 1 Mbit/s like STACK A (decision of the owner); legacy_bit_rate_bps is the 500 kbit/s of the earlier URTC protocol, kept as a documented value for heads not yet updated.",
   "estop_id": 1,
   "slot_base": 1536,
   "slot_window": 64,
@@ -140,7 +140,7 @@
   "tool_head": {
     "source": "URTC-COMMON spec/can_protocol.json",
     "protocol_version": 1,
-    "bit_rate_bps": 500000,
+    "bit_rate_bps": 1000000,
     "bus": "tool_head_downlink",
     "messages": [
       {
@@ -673,6 +673,7 @@
         "name": "READBACK_PAGE_ACK",
         "direction": "host_to_board"
       }
-    ]
+    ],
+    "legacy_bit_rate_bps": 500000
   }
 }
