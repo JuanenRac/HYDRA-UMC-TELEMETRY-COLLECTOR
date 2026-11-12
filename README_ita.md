@@ -284,7 +284,7 @@ Questo progetto fa parte dell'ecosistema robotico HYDRA-UMC dello stesso autore 
 
 **Direttamente Correlati**
 - **[HYDRA-UMC-SERVER](https://github.com/JuanenRac/HYDRA-UMC-SERVER)** — il vero backend headless (REST/WebSocket) con cui parla davvero ogni client di controllo — la fonte dei log che questo progetto ingerisce.
-- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** — il progetto della scheda madre del braccio robotico: host CM5 + coprocessore STM32H745 dual-core, pensato per coordinare fino a 8 bracci utensile via CAN-OTA/SPI-OTA (firmware in fase iniziale; nessuna scheda assemblata per ora); oggi usa la propria convenzione v0, tracciata onestamente come lavoro futuro anziché dichiarata completata.
+- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** — il progetto della scheda madre del braccio robotico: host NVIDIA Jetson Orin NX + STM32H757 dual-core (la CM5 resta il banco pilota), pensato per coordinare fino a 8 bracci utensile via CAN-OTA/SPI-OTA (firmware in fase iniziale; nessuna scheda assemblata per ora); oggi usa la propria convenzione v0, tracciata onestamente come lavoro futuro anziché dichiarata completata.
 - **[URTC](https://github.com/JuanenRac/URTC)** — firmware per la scheda fisica dell'Universal Robot Tool Controller, oltre 25 profili utensile su bus CAN — la vera tabella di ID CAN contro cui il formato CAN proprio di questo progetto è destinato a integrarsi col tempo; oggi usa la propria convenzione v0, tracciata onestamente come lavoro futuro anziché dichiarata completata.
 
 **Fa Anche Parte dell'Ecosistema**

@@ -281,7 +281,7 @@ HYDRA-UMC-TELEMETRY-COLLECTOR/
 
 **直接相关**
 - **[HYDRA-UMC-SERVER](https://github.com/JuanenRac/HYDRA-UMC-SERVER)** — 每个控制客户端真正通信的真实无头后端(REST/WebSocket) —— 本项目摄取日志的来源。
-- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** — 机器人手臂主板设计——CM5 主机 + 双核 STM32H745,目标是通过 CAN-OTA/SPI-OTA 协调最多 8 条工具臂(固件处于早期阶段,尚无已组装的电路板);目前使用自身的 v0 约定,诚实地作为未来工作跟踪,而非宣称已完成。
+- **[HYDRA-UMC](https://github.com/JuanenRac/HYDRA-UMC)** — 机器人手臂主板设计——NVIDIA Jetson Orin NX 主机 + 双核 STM32H757(CM5 保留为试验台),目标是通过 CAN-OTA/SPI-OTA 协调最多 8 条工具臂(固件处于早期阶段,尚无已组装的电路板);目前使用自身的 v0 约定,诚实地作为未来工作跟踪,而非宣称已完成。
 - **[URTC](https://github.com/JuanenRac/URTC)** — 面向实体 Universal Robot Tool Controller 板卡的固件，通过 CAN 总线支持 25 种以上工具配置 —— 本项目自身 CAN 线路格式最终计划与之集成的真实 CAN ID 表;目前使用自身的 v0 约定,诚实地作为未来工作跟踪,而非宣称已完成。
 
 **生态系统中的其他项目**
