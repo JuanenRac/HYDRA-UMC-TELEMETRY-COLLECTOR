@@ -90,8 +90,10 @@ func main() {
 	grpcKey := flag.String("grpc-tls-key", "", "PEM private key of -grpc-tls-cert")
 	grpcClientCA := flag.String("grpc-client-ca", "", "PEM authority that must have signed the certificate of a gRPC caller (mutual TLS; needs -grpc-tls-cert)")
 	grpcAnonymous := flag.Bool("grpc-allow-anonymous", false, "allow a gRPC listener beyond loopback with no token and no client certificate, or a token in clear text")
+	canSequence := flag.Bool("can-sequence", true, "give every CAN frame decoded here a growing sequence number, so two frames of one signal that arrive in the same millisecond keep distinct identities in the datalake (false sends none, as before)")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
+	telemetry.CANSequencing = *canSequence
 
 	if problem := flagProblem(*bufferCap, *batchSize, *flushInterval); problem != "" {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)

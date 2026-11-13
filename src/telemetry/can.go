@@ -62,6 +62,9 @@ func ParseCANFrame(arbitrationID uint32, data []byte) (Sample, error) {
 		Timestamp: nowFunc(),
 		Fields:    map[string]float64{"value": value},
 	}
+	if CANSequencing {
+		sample.Sequence = NextCANSequence()
+	}
 	if err := sample.Validate(); err != nil {
 		return Sample{}, err
 	}
