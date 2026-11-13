@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+- **Dependencies with security fixes updated:** `google.golang.org/grpc` 1.74.2 to 1.83.1 and `golang.org/x/net` 0.40.0 to 0.55.0 (with `protobuf`, `x/sys`, `x/text` and the gRPC `genproto` module that come with them); the module needs Go 1.25, so the Dockerfile builds with `golang:1.25-alpine`. `src/deps_floor_test.go` (2 tests) keeps these modules at or above the fixed releases and the build image at least as new as `go.mod`.
+
 ## [0.2.2] - A gRPC ingest, CAN frames read with the identifiers of the CAN contract and a Dockerfile of its own
 
 - **The bit rate of the tool head bus comes from the CAN contract (`Table.ToolHeadBitRate`):** the `tool_head` section now gives 1 Mbit/s (the heads move to it, like STACK A) and an optional `legacy_bit_rate_bps` (500 kbit/s) for heads not updated yet; both are checked when the file is read (10 kbit/s to 1 Mbit/s) and the reader never chooses a rate by itself. 1 new test.
