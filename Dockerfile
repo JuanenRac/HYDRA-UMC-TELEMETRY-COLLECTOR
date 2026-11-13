@@ -16,7 +16,7 @@
 #   docker run --rm -e HYDRA_UMC_TELEMETRY_COLLECTOR_TOKEN='a-secret-of-16-or-more-characters' -p 127.0.0.1:8092:8092 \
 #       -v telemetry-collector-data:/data hydra-umc-telemetry-collector --datalake-url http://datalake:8095 --spool /data/spool.bin
 
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
 
 WORKDIR /src
 COPY src ./
