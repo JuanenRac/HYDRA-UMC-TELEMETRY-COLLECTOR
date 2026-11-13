@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.2.2] - A gRPC ingest, CAN frames read with the identifiers of the CAN contract and a Dockerfile of its own
 
 - **The bit rate of the tool head bus comes from the CAN contract (`Table.ToolHeadBitRate`):** the `tool_head` section now gives 1 Mbit/s (the heads move to it, like STACK A) and an optional `legacy_bit_rate_bps` (500 kbit/s) for heads not updated yet; both are checked when the file is read (10 kbit/s to 1 Mbit/s) and the reader never chooses a rate by itself. 1 new test.
 

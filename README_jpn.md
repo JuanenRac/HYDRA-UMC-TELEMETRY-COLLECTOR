@@ -18,8 +18,8 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-Go-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/Protocol-CAN%20%2F%20WebSocket-yellow.svg" alt="Protocol">
-  <img src="https://img.shields.io/badge/Tests-201%20passing-2ea44f.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.2.1-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Tests-202%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Version-0.2.2-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
@@ -33,9 +33,9 @@ GPL-3.0-or-later - see LICENSE
 
 | | |
 |---|---|
-| バージョン | `0.2.1` |
+| バージョン | `0.2.2` |
 | 成熟度 | 機能する |
-| テスト | 201 (`go test ./...`) |
+| テスト | 202 (`go test ./...`) |
 | 技術 | Go / CAN/WebSocket parsers / bounded FIFO buffer / HTTP API |
 | 対象 | HYDRA-UMC セルの Raspberry Pi CM5 |
 | 実機での確認 | 対象外：ここにあるものはハードウェア上では動きません |
@@ -51,7 +51,7 @@ GPL-3.0-or-later - see LICENSE
 | 領域 | 状態 | ここでの意味 |
 |---|---|---|
 | ソフトウェア | 🟡 | 主な目的では動作します。足りない点は上の正直さの確認に書かれています |
-| テスト | 🟢 | 自動テスト 201 件。変更のたびに実行されます |
+| テスト | 🟢 | 自動テスト 202 件。変更のたびに実行されます |
 | 実機 | 🟢 | 対象外：ここにあるものはハードウェア上では動きません |
 | インターフェースとプロトコル | 🟡 | 提供するルートやメッセージは文書化され、クライアントで試験済みです。すべてのクライアントがまだ使ったわけではありません |
 | 連携 | 🟡 | CM5 のテストベンチで他のサービスと一緒に動作し、メッセージは SDK の共通契約に従います |
@@ -86,6 +86,8 @@ GPL-3.0-or-later - see LICENSE
 ## 🧩 HYDRA-UMC での役割
 
 **HYDRA-UMC-TELEMETRY-COLLECTOR** は、CAN フレーム、WebSocket メッセージ、ブリッジの MQTT 状態からテレメトリーを受け取り、再送による重複を除き、上限付きバッファを保ち、`HYDRA-UMC-DATALAKE` にバッチで届けます。障害時用にディスク上のスプールを任意で使えます。データレイクが無い場合は、書き込む内容を出力します。
+
+> **プラットフォーム：** この README の「CM5」は、現在動作している試験用ベンチを指します。HYDRA-UMC の目標プラットフォームは NVIDIA Jetson Orin NX 16 GB ですが、これは製作も試験もされていない設計です。
 
 ## 🏛️ アーキテクチャ
 
@@ -156,7 +158,7 @@ Go 1.24 以上が必要です。
 
 ## 🧪 テスト
 
-`cd src && go test ./...` で自動テスト 201 件を実行します。 ハードウェアも、このマシンの外にあるものも必要ありません。
+`cd src && go test ./...` で自動テスト 202 件を実行します。 ハードウェアも、このマシンの外にあるものも必要ありません。
 
 CI は `HYDRA_UMC_CI=1 python tools/ci_validate.py` を実行し、マニフェスト、文書、8 つの README、図を検査します。
 
