@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **gRPC is raised to 1.83.2 (with the network, system and text libraries it pulls in):** the release fixes a crash of servers that use the xDS feature when a request lacks the authority header; the floor that the dependency test enforces moves up with it, so the old version cannot come back.
+
 - **The deduplication window can be kept across a restart (off by default):** `-dedup-state <file>` writes the window of every producer (atomically, every `-dedup-state-interval`, 30 s by default, and at shutdown) and reads it at start, so a producer that resends its last unacknowledged messages right after the collector came back is not counted twice. A file written for another window or version, or one that cannot be read, is refused and the window starts empty; without the flag nothing changes. 7 tests in `dedup` and `collector`.
 - **Two CAN frames of one signal in the same millisecond no longer collide downstream (`-can-sequence`, on by default):** a CAN frame is stamped with its arrival in milliseconds, so a burst gave several readings the same identity (source, kind, field, timestamp) in the datalake, which kept only the last. Every decoded frame now carries a growing `sequence`, and the datalake already keeps the sequence in the identity of a point (its own migration), so the readings stay apart; `-can-sequence=false` sends none, as before. Tests with simulated frames only.
 
