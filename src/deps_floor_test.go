@@ -19,7 +19,7 @@ import (
 
 // dependencyFloors lists the lowest release allowed for each module that had a security advisory.
 var dependencyFloors = map[string]string{
-	"google.golang.org/grpc": "1.83.1",
+	"google.golang.org/grpc": "1.83.2",
 	"golang.org/x/net":       "0.55.0",
 }
 

@@ -175,6 +175,14 @@ func (c *Collector) closeBuckets(drain bool) {
 // Call it before the collector runs. A nil spool (the default) keeps the in-memory behaviour.
 func (c *Collector) SetSpool(s *spool.File) { c.spool = s }
 
+// LoadDedupState reads the deduplication window a former run saved, so a producer that resends its last
+// messages right after a restart is not counted twice. A missing file is the first start; a file that does
+// not fit is an error and the window starts empty. Call it before the collector runs.
+func (c *Collector) LoadDedupState(path string) (int, error) { return c.dedup.Load(path) }
+
+// SaveDedupState writes the deduplication window to path (see LoadDedupState).
+func (c *Collector) SaveDedupState(path string) error { return c.dedup.Save(path) }
+
 // SetPriority sets the policy a full buffer uses to make room for a more important sample
 // (higher numbers matter more); nil keeps plain backpressure. Call it before the collector runs.
 func (c *Collector) SetPriority(priority func(telemetry.Sample) int) { c.buf.SetPriority(priority) }

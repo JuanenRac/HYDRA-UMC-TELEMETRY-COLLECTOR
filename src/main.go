@@ -63,6 +63,8 @@ func main() {
 	permanentStatuses := flag.String("datalake-permanent-statuses", "", "comma-separated extra HTTP statuses (for example 401,403,404) the datalake may answer that discard the sample instead of retrying it for ever; empty keeps retrying")
 	spoolPath := flag.String("spool", "", "file that holds the samples of a datalake outage on disk instead of in memory (empty: no spool)")
 	spoolMax := flag.Int64("spool-max-bytes", 256<<20, "most unsent bytes the -spool file may hold")
+	dedupState := flag.String("dedup-state", "", "file that keeps the deduplication window across a restart, so a producer that resends its last messages is not counted twice (empty: off, the window starts empty)")
+	dedupStateEvery := flag.Duration("dedup-state-interval", 30*time.Second, "how often the -dedup-state file is rewritten while running (it is also written at shutdown)")
 	priority := flag.String("priority", "", "kind=level pairs (for example fault=9,motor_temp=5) that let a full buffer drop the least important queued sample for a more important one; empty keeps plain backpressure")
 	priorityDefault := flag.Int("priority-default", 0, "level of the kinds that -priority does not list")
 	downsampleRules := flag.String("downsample", "", "kind=intervalMs[:function] pairs (for example vibration=1000:max,motor_current=100) that fold the samples of a high-frequency kind into one per time bucket before they are buffered; the function is mean (default), min, max, last or sum; empty keeps every sample")
@@ -219,6 +221,17 @@ func main() {
 		c.SetSpool(sp)
 		fmt.Printf("[telemetry-collector] outages are kept on disk in %s (%d samples already waiting)\n", *spoolPath, sp.Pending())
 	}
+	if *dedupState != "" {
+		if *dedupStateEvery < time.Second {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] -dedup-state-interval must be at least 1s")
+			os.Exit(2)
+		}
+		if n, err := c.LoadDedupState(*dedupState); err != nil {
+			fmt.Fprintln(os.Stderr, "[telemetry-collector] "+err.Error()+"; starting with an empty window")
+		} else {
+			fmt.Printf("[telemetry-collector] deduplication window kept in %s (%d producer(s) restored)\n", *dedupState, n)
+		}
+	}
 	if priorityTable != nil {
 		c.SetPriority(buffer.PriorityByKind(priorityTable, *priorityDefault))
 	}
@@ -255,6 +268,22 @@ func main() {
 	defer stop()
 
 	go c.Run(ctx, *flushInterval, *batchSize)
+	if *dedupState != "" {
+		go func() {
+			ticker := time.NewTicker(*dedupStateEvery)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := c.SaveDedupState(*dedupState); err != nil {
+						log.Printf("[telemetry-collector] could not save the deduplication window: %v", err)
+					}
+				}
+			}
+		}()
+	}
 	if grpcServer != nil {
 		listener, err := net.Listen("tcp", *grpcAddr)
 		if err != nil {
@@ -334,6 +363,11 @@ func main() {
 
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
+	}
+	if *dedupState != "" {
+		if err := c.SaveDedupState(*dedupState); err != nil {
+			log.Printf("[telemetry-collector] could not save the deduplication window: %v", err)
+		}
 	}
 	fmt.Println("[telemetry-collector] shutting down")
 }
