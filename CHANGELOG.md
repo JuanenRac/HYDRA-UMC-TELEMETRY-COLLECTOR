@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **After an outage, samples that wait on the disk spool are no longer overtaken by newer ones:** while any part of the spool was still pending, the newer samples of the buffer were written to the data lake straight away, so a producer's samples could arrive out of order. The newer batch now queues behind the spooled ones until the spool is empty.
+
 - **gRPC is raised to 1.83.2 (with the network, system and text libraries it pulls in):** the release fixes a crash of servers that use the xDS feature when a request lacks the authority header; the floor that the dependency test enforces moves up with it, so the old version cannot come back.
 
 - **The deduplication window can be kept across a restart (off by default):** `-dedup-state <file>` writes the window of every producer (atomically, every `-dedup-state-interval`, 30 s by default, and at shutdown) and reads it at start, so a producer that resends its last unacknowledged messages right after the collector came back is not counted twice. A file written for another window or version, or one that cannot be read, is refused and the window starts empty; without the flag nothing changes. 7 tests in `dedup` and `collector`.

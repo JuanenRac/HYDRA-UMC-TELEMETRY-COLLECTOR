@@ -368,7 +368,9 @@ func (c *Collector) FlushOnce(batchSize int) int {
 	if c.spool != nil && c.spool.Pending() > 0 {
 		var alive bool
 		delivered, alive = c.replaySpool(batchSize)
-		sinkDown = !alive
+		// Whatever is still on disk is older than what is in memory: while any of it is left, the new batch
+		// queues behind it on the spool instead of overtaking it, so each producer's order survives an outage.
+		sinkDown = !alive || c.spool.Pending() > 0
 	}
 	return delivered + c.flushBuffer(batchSize, sinkDown)
 }
