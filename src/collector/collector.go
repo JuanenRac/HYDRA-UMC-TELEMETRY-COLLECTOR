@@ -309,8 +309,8 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 		c.ingested.Add(1)
 		return nil
 	}
-	// AllowThen (not the plain Allow+buf.Push done separately, as
-	// this used to be) only commits the sequence as seen once buf.Push
+	// AllowThen (not the plain Allow followed by a separate buf.Push)
+	// only commits the sequence as seen once buf.Push
 	// itself actually succeeds - see that method's own header comment
 	// for the real, permanent data-loss bug this closes (a sample
 	// rejected once for a full buffer could never be accepted on any
@@ -338,22 +338,21 @@ func (c *Collector) ingest(s telemetry.Sample) error {
 // so.
 //
 // (P1):
-// that used to include a sample the sink PERMANENTLY rejected as invalid
-// (HTTP 400) - requeuing it put it right back at the front of the queue,
-// where the very next flush attempted it again, failed the identical
-// way, and requeued it again, forever. Every real, valid sample behind
-// it in the queue was blocked indefinitely by one poisoned sample that
-// was never going to succeed no matter how many times it was retried.
+// A requeue of the whole batch must not include a sample the sink
+// PERMANENTLY rejected as invalid (HTTP 400) - it would go right back to
+// the front of the queue, the very next flush would attempt it again, fail
+// the identical way, and requeue it again, forever, and every valid
+// sample behind it would be blocked indefinitely.
 // When the sink identifies exactly which sample it rejected (see
 // sink.InvalidDataError's own Index field), that one sample is dropped
 // (quarantined, counted in Stats().Quarantined - never silently) and the
 // REST of the batch is still requeued normally.
 //
-// A plain transport-level failure used to requeue the WHOLE batch
-// unconditionally, including whatever prefix DatalakeSink's own
-// per-sample loop had already gotten a real 202 for - that prefix got
-// resent on the very next retry and landed as a duplicate row in
-// DATALAKE. sink.PartialWriteError now reports exactly how far the loop
+// A plain transport-level failure must not requeue the WHOLE batch,
+// because it would include whatever prefix DatalakeSink's own
+// per-sample loop had already gotten a real 202 for - that prefix would be
+// resent on the very next retry and land as a duplicate row in
+// DATALAKE. sink.PartialWriteError reports exactly how far the loop
 // got (see its own header comment), so only the real, never-attempted
 // remainder is requeued; a Sink that can't offer that signal still falls
 // back to the whole batch, the same safe default as before.

@@ -37,7 +37,7 @@ import (
 // quarantine (permanently drop, never requeue) exactly this one
 // permanently-rejected sample instead of the whole batch: retrying the
 // identical rejected bytes can never succeed, and requeuing them
-// unconditionally used to put this same sample back at the front of the
+// unconditionally would put this same sample back at the front of the
 // queue forever, blocking every real, valid sample behind it.
 type InvalidDataError struct {
 	Sample telemetry.Sample
@@ -86,7 +86,7 @@ func AsInvalidData(err error) (*InvalidDataError, bool) {
 //
 // collector.go's own FlushOnce uses this to requeue only
 // batch[Succeeded:] - the samples the sink never got to attempt - instead
-// of the WHOLE batch, which used to re-send every already-written sample
+// of the WHOLE batch, which would re-send every already-written sample
 // again on the very next retry, landing as a duplicate row in DATALAKE
 // for each one.
 type PartialWriteError struct {

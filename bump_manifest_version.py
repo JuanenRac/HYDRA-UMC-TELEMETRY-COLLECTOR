@@ -214,12 +214,11 @@ def write_manifest(data: dict[str, object]) -> None:
 
 
 def sync_package_lock(version: str) -> bool:
-    """This utility used to only ever patch the ONE `native_version.file`
-    (typically `package.json`, via a plain text regex - see
-    `replace_version` above), leaving `package-lock.json`'s own separate
-    copy of the same root version - both its own top-level `"version"`
-    and `packages[""].version` (npm's own real lockfile-v2/v3 shape) -
-    silently behind.
+    """Patching only the ONE `native_version.file` (typically
+    `package.json`, via a plain text regex - see `replace_version` above)
+    would leave `package-lock.json`'s own separate copy of the same root
+    version - both its own top-level `"version"` and `packages[""].version`
+    (npm's own real lockfile-v2/v3 shape) - silently behind.
 
     A real, empirically-verified no-op for every OTHER repository this
     same shared script is copied into: `json.dumps(data, indent=2,

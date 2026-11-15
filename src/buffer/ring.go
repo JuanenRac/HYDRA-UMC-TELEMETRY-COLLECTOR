@@ -16,8 +16,8 @@
 // queue when no priority is set), every sample stamped with an arrival number.
 // Taking the oldest sample looks at the front of each queue, and dropping the
 // least important one pops the front of the lowest queue, so a Push into a full
-// buffer costs a handful of steps however many samples are queued (it used to
-// scan every one of them under the lock and shift the slice).
+// buffer costs a handful of steps however many samples are queued (no scan of
+// every sample under the lock, no shifting of the slice).
 package buffer
 
 import (

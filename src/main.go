@@ -6,7 +6,7 @@
 // HYDRA-UMC-TELEMETRY-COLLECTOR - high-throughput ingestion node for CAN
 // and WebSocket logs.
 //
-// Real ingestion pipeline, no longer just an identity print: telemetry/
+// Real ingestion pipeline: telemetry/
 // parses CAN frames and WebSocket JSON into a normalized Sample,
 // buffer/ holds them in a bounded, backpressure-reporting queue,
 // collector/ orchestrates ingest+flush (retrying a batch instead of

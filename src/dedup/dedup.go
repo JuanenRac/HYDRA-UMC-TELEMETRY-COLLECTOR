@@ -207,7 +207,7 @@ func (t *Tracker) makeRoomLocked() {
 // false means "already seen, or too stale behind this source's own
 // high-water mark to trust" - the caller should treat it as a duplicate
 // and not re-buffer it. A true result is committed immediately -
-// collector.go does NOT use this directly anymore for exactly the
+// collector.go does NOT use this directly, for exactly the
 // reason AllowThen's own header comment explains; kept for any
 // caller that genuinely wants "check and immediately commit" as one
 // step (and every existing unit test in this package already assumes
@@ -231,9 +231,9 @@ func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
 // seen once `accept` (the caller's own downstream side effect - here,
 // always collector.go's `c.buf.Push(s)`) actually succeeds.
 //
-// `ingest` used to call plain Allow and, separately and
-// unconditionally, buf.Push() right after. Allow() had ALREADY marked
-// the sequence as permanently seen the moment it returned true -
+// Calling plain Allow and, separately and unconditionally, buf.Push()
+// right after would be wrong: Allow() has ALREADY marked
+// the sequence as permanently seen the moment it returns true -
 // completely independent of whether the following buf.Push() itself
 // then succeeded. A full buffer meant Push() returned ErrFull and the
 // sample was dropped, but dedup's own state still said "already
@@ -247,7 +247,7 @@ func (t *Tracker) Allow(sourceID string, sequence uint64) bool {
 // Holding t.mu for the ENTIRE check-then-accept-then-commit sequence
 // also closes a real concurrency gap the acceptance criteria calls out
 // explicitly: two producers racing the identical (sourceID, sequence)
-// can no longer both be told "yes, new, go ahead" and both persist a
+// cannot both be told "yes, new, go ahead" and both persist a
 // copy - the second one through this same lock always sees the first's
 // now-committed mark, exactly like any other duplicate.
 func (t *Tracker) AllowThen(sourceID string, sequence uint64, accept func() error) (allowed bool, err error) {
