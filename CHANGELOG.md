@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Simulation bench part two:** `collector/collector_simulation_faults_test.go` (4 more scenarios, fixed seed) draws the faults that the first part does not: a collector that crashes with samples on its disk spool and starts again with its saved state, a producer that the lake rejects for good while the lake flaps for the others, a spool that fills up, and the real sink against an HTTP twin of the lake that answers 503 and 500, resets the connection and loses the answer of a sample it stored. The order of each producer is kept and nothing accepted is lost; the only duplicates are those of a lost answer. `docs/SIMULATION.md` lists the scenarios and the physical tests that are still pending, and the evidence of the manifest is now `simulator`.
+
 
 ## [0.2.3]
 
