@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 - **The SDK pin and the shared tools are up to date:** the SDK dependency names the newest release tag, and the shared tools are the canonical copies again.
 - **Comments describe what the code does, not what it used to do:** the comments of the buffer, the collector, the duplicate tracker, the datalake sink, their tests and the version bump script say the present behaviour and the reason for it. Comments only: no behaviour changes.
+- **Comments describe what the code does, not what it used to do:** the comments of the buffer, the collector, the duplicate tracker, the datalake sink, and their tests say the present behaviour and the reason for it. Comments only: no behaviour changes.
 - **After an outage, samples that wait on the disk spool are no longer overtaken by newer ones:** while any part of the spool was still pending, the newer samples of the buffer were written to the data lake straight away, so a producer's samples could arrive out of order. The newer batch now queues behind the spooled ones until the spool is empty.
 
 - **gRPC is raised to 1.83.2 (with the network, system and text libraries it pulls in):** the release fixes a crash of servers that use the xDS feature when a request lacks the authority header; the floor that the dependency test enforces moves up with it, so the old version cannot come back.
