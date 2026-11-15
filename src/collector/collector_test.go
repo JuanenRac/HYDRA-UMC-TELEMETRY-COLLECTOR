@@ -228,8 +228,8 @@ func TestCollector_RetryAfterBufferFullEventuallyPersistsExactlyOnce(t *testing.
 	}
 
 	// Retry: the EXACT SAME sample (sourceId=robot-1, sequence=2) that
-	// was rejected above. This is the real bug - it used to come back
-	// ErrDuplicate forever, even though it was never actually buffered
+	// was rejected above. It must be accepted: answering ErrDuplicate
+	// forever would be wrong, because it was never actually buffered
 	// the first time.
 	if err := c.IngestWS(wsMessageWithSeq("robot-1", 2)); err != nil {
 		t.Fatalf("retry after freeing capacity: err = %v, want nil - the sample was never actually persisted the first time", err)
@@ -381,9 +381,9 @@ func TestCollector_RealDisconnectReconnectResendIsDeduplicated(t *testing.T) {
 }
 
 func TestCollector_FiftySustainedReconnectCyclesNeverLeakOrMisbehave(t *testing.T) {
-	// Real long-session/reconnection coverage (previously absent
-	// anywhere in this repo - every other reconnect test here, including
-	// the one right above, only ever exercises ONE disconnect/reconnect).
+	// Real long-session/reconnection coverage (every other reconnect
+	// test here, including the one right above, only ever exercises ONE
+	// disconnect/reconnect).
 	// 50 simulated cycles against the same device, each sending a few
 	// genuinely new sequences then "reconnecting" and resending its own
 	// last two as a real device unsure what already got through would -
@@ -469,10 +469,10 @@ func TestCollector_InvalidDataFlushErrorIsClassifiedSeparatelyFromTransport(t *t
 }
 
 // this project's own exact reproduction: a batch of [valid, POISONED, valid]
-// used to requeue the WHOLE batch on the sink's InvalidDataError,
-// putting the poisoned sample right back at the front - the next flush
-// failed identically, requeued identically, forever, and the two
-// perfectly good samples behind it never got a chance to flush. This
+// must not requeue the WHOLE batch on the sink's InvalidDataError:
+// the poisoned sample would go right back to the front - the next flush
+// would fail identically, requeue identically, forever, and the two
+// perfectly good samples behind it would never get a chance to flush. This
 // confirms only the poisoned sample is quarantined and the survivors
 // genuinely flush successfully on the very next attempt.
 func TestCollector_InvalidDataQuarantinesOnlyThePoisonedSample(t *testing.T) {
@@ -581,9 +581,8 @@ func (s *partialFailureSink) Write(batch []telemetry.Sample) error {
 // This is the real regression PartialWriteError exists to fix: a batch
 // of 3 where the sink genuinely wrote the first 2 before failing on the
 // 3rd must only requeue that 1 unwritten sample, never resend the 2
-// already-confirmed ones - the whole-batch requeue this project used to
-// do unconditionally would have landed robot-1/robot-2 as duplicate rows
-// in DATALAKE on the very next retry.
+// already-confirmed ones - a whole-batch requeue would land
+// robot-1/robot-2 as duplicate rows in DATALAKE on the very next retry.
 func TestCollector_TransportFailureRequeuesOnlyTheUnwrittenRemainder(t *testing.T) {
 	s := &partialFailureSink{FailAt: 2}
 	c := New(10, s)

@@ -206,7 +206,7 @@ func TestDatalakeSink_InvalidDataErrorNamesTheRealBatchIndex(t *testing.T) {
 // network blip produces) must report the real number of samples DATALAKE
 // already gave a genuine 202 for, via PartialWriteError.Succeeded - this
 // is what lets collector.go's own FlushOnce requeue only the real
-// unattempted remainder instead of the whole batch (which used to resend
+// unattempted remainder instead of the whole batch (which would resend
 // the already-accepted prefix again on retry and land duplicate rows in
 // DATALAKE).
 func TestDatalakeSink_TransportFailureReportsHowManySucceeded(t *testing.T) {
