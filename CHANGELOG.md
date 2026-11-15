@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+
+## [0.2.3]
+
 - **The SDK pin and the shared tools are up to date:** the SDK dependency names the newest release tag, and the shared tools are the canonical copies again.
 - **Comments describe what the code does, not what it used to do:** the comments of the buffer, the collector, the duplicate tracker, the datalake sink, their tests and the version bump script say the present behaviour and the reason for it. Comments only: no behaviour changes.
 - **Comments describe what the code does, not what it used to do:** the comments of the buffer, the collector, the duplicate tracker, the datalake sink, and their tests say the present behaviour and the reason for it. Comments only: no behaviour changes.
@@ -15,6 +18,8 @@ All notable changes to this project are documented here.
 - **Two CAN frames of one signal in the same millisecond no longer collide downstream (`-can-sequence`, on by default):** a CAN frame is stamped with its arrival in milliseconds, so a burst gave several readings the same identity (source, kind, field, timestamp) in the datalake, which kept only the last. Every decoded frame now carries a growing `sequence`, and the datalake already keeps the sequence in the identity of a point (its own migration), so the readings stay apart; `-can-sequence=false` sends none, as before. Tests with simulated frames only.
 
 - **Dependencies with security fixes updated:** `google.golang.org/grpc` 1.74.2 to 1.83.1 and `golang.org/x/net` 0.40.0 to 0.55.0 (with `protobuf`, `x/sys`, `x/text` and the gRPC `genproto` module that come with them); the module needs Go 1.25, so the Dockerfile builds with `golang:1.25-alpine`. `src/deps_floor_test.go` (2 tests) keeps these modules at or above the fixed releases and the build image at least as new as `go.mod`.
+
+- Build version synchronized with `hydra-umc.project.json` and the repository-native version source.
 
 ## [0.2.2] - A gRPC ingest, CAN frames read with the identifiers of the CAN contract and a Dockerfile of its own
 
