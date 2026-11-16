@@ -133,6 +133,29 @@ func TestMqttProblemRefusesPlaintextCredentialsToAnotherMachine(t *testing.T) {
 	}
 }
 
+func TestDatalakeProblemRefusesAPlainTokenToAnotherMachine(t *testing.T) {
+	cases := []struct {
+		name         string
+		url, token   string
+		plain, wants bool
+	}{
+		{"no datalake", "", "a-token-of-16-chars", false, false},
+		{"no token", "http://10.0.0.5:8095", "", false, false},
+		{"loopback", "http://127.0.0.1:8095", "a-token-of-16-chars", false, false},
+		{"localhost", "http://localhost:8095", "a-token-of-16-chars", false, false},
+		{"ipv6 loopback", "http://[::1]:8095", "a-token-of-16-chars", false, false},
+		{"https", "https://10.0.0.5:8095", "a-token-of-16-chars", false, false},
+		{"another machine over http", "http://10.0.0.5:8095", "a-token-of-16-chars", false, true},
+		{"a name that only starts with 127.", "http://127.cell.example.com:8095", "a-token-of-16-chars", false, true},
+		{"allowed on purpose", "http://10.0.0.5:8095", "a-token-of-16-chars", true, false},
+	}
+	for _, c := range cases {
+		if got := datalakeProblem(c.url, c.token, c.plain) != ""; got != c.wants {
+			t.Errorf("%s: refused = %v, want %v", c.name, got, c.wants)
+		}
+	}
+}
+
 func TestAnomalyProblem(t *testing.T) {
 	cases := []struct {
 		name          string

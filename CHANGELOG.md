@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The datalake token is no longer sent in the clear to another machine without saying so:** `-datalake-url` with a token over plain http to a host that is not this machine stops the start, as the broker and the anomaly detector already did; `-datalake-allow-plaintext` allows it on a network you trust. Test added.
+- **`-grpc-allow-anonymous` no longer allows the bearer token in clear text:** the same switch meant "no credential" and "token without TLS", so someone who opened a listener for a test and later added a token sent it in the clear without a warning. The token without TLS beyond loopback has its own switch, `-grpc-allow-plaintext-token`. A start that relied on `-grpc-allow-anonymous` for that now stops with the new message. Tests added.
 - **Simulation bench part two:** `collector/collector_simulation_faults_test.go` (4 more scenarios, fixed seed) draws the faults that the first part does not: a collector that crashes with samples on its disk spool and starts again with its saved state, a producer that the lake rejects for good while the lake flaps for the others, a spool that fills up, and the real sink against an HTTP twin of the lake that answers 503 and 500, resets the connection and loses the answer of a sample it stored. The order of each producer is kept and nothing accepted is lost; the only duplicates are those of a lost answer. `docs/SIMULATION.md` lists the scenarios and the physical tests that are still pending, and the evidence of the manifest is now `simulator`.
 
 
