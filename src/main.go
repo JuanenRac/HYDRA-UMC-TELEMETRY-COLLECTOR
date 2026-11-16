@@ -82,6 +82,7 @@ func main() {
 	anomalyToken := flag.String("anomaly-token", os.Getenv(anomalyTokenEnv), "bearer token sent to the detector (default: $"+anomalyTokenEnv+")")
 	anomalyQueue := flag.Int("anomaly-queue", 64, "windows that may wait to be sent to the detector; a full queue drops the new window")
 	anomalyMaxSeries := flag.Int("anomaly-max-series", 64, "most distinct (source, kind, field) signals the stream keeps a window for")
+	datalakePlain := flag.Bool("datalake-allow-plaintext", false, "allow the datalake token over plain http to a host that is not on this machine")
 	anomalyPlain := flag.Bool("anomaly-allow-plaintext", false, "allow the detector token over plain http to a host that is not on this machine")
 	identityKeyFile := flag.String("identity-key-file", os.Getenv(identityKeyFileEnv), "file with the signing key of HYDRA-UMC-SERVER (its JWT_SECRET): a valid token of the SERVER is then accepted next to the tokens, every route (/stats, /metrics and GET /health too) demands an identity and a viewer may read but not ingest; off by default (default: $"+identityKeyFileEnv+")")
 	healthOpen := flag.Bool("health-open", healthOpenFromEnv(), "open GET /health (default: $"+healthOpenEnv+"); closed it answers 404; open it answers a caller on loopback, and any other caller needs the ingest or metrics token")
@@ -91,7 +92,8 @@ func main() {
 	grpcCert := flag.String("grpc-tls-cert", "", "PEM certificate that turns TLS on for the gRPC ingest (with -grpc-tls-key)")
 	grpcKey := flag.String("grpc-tls-key", "", "PEM private key of -grpc-tls-cert")
 	grpcClientCA := flag.String("grpc-client-ca", "", "PEM authority that must have signed the certificate of a gRPC caller (mutual TLS; needs -grpc-tls-cert)")
-	grpcAnonymous := flag.Bool("grpc-allow-anonymous", false, "allow a gRPC listener beyond loopback with no token and no client certificate, or a token in clear text")
+	grpcAnonymous := flag.Bool("grpc-allow-anonymous", false, "allow a gRPC listener beyond loopback with no token and no client certificate")
+	grpcPlainToken := flag.Bool("grpc-allow-plaintext-token", false, "allow the gRPC bearer token over a connection without TLS beyond loopback")
 	canSequence := flag.Bool("can-sequence", true, "give every CAN frame decoded here a growing sequence number, so two frames of one signal that arrive in the same millisecond keep distinct identities in the datalake (false sends none, as before)")
 	flag.Parse()
 	telemetry.MaxFutureSkew = *futureSkew
@@ -129,6 +131,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
 		os.Exit(2)
 	}
+	if problem := datalakeProblem(*datalakeURL, *datalakeToken, *datalakePlain); problem != "" {
+		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
+		os.Exit(2)
+	}
 	if problem := mqttProblem(*mqttURL, *mqttUser, *mqttPlain); problem != "" {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] "+problem)
 		os.Exit(2)
@@ -151,7 +157,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	grpcOptions := grpcin.Options{Addr: *grpcAddr, CertFile: *grpcCert, KeyFile: *grpcKey, ClientCAFile: *grpcClientCA, AllowAnonymous: *grpcAnonymous}
+	grpcOptions := grpcin.Options{Addr: *grpcAddr, CertFile: *grpcCert, KeyFile: *grpcKey, ClientCAFile: *grpcClientCA, AllowAnonymous: *grpcAnonymous, AllowPlaintextToken: *grpcPlainToken}
 	if *grpcAddr != "" && *grpcTokenFile != "" {
 		token, err := grpcin.ReadToken(*grpcTokenFile)
 		if err != nil {

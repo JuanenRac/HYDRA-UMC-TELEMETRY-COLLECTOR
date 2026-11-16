@@ -390,6 +390,15 @@ func TestTheGuardOnTheListenAddress(t *testing.T) {
 	if open.Problem() != "" {
 		t.Errorf("explicitly open was refused: %s", open.Problem())
 	}
+	// an open listener is not permission to send the token in the clear: that has its own switch
+	plainToken := Options{Addr: "0.0.0.0:8093", Submit: submit, Token: validCredential, AllowAnonymous: true}
+	if plainToken.Problem() == "" {
+		t.Error("-grpc-allow-anonymous allowed a token in clear text")
+	}
+	plainToken.AllowPlaintextToken = true
+	if problem := plainToken.Problem(); problem != "" {
+		t.Errorf("the token in clear text was refused although it was allowed on purpose: %s", problem)
+	}
 	if (Options{Addr: ":8093", Submit: submit}).Problem() == "" {
 		t.Error("an empty host is every interface")
 	}

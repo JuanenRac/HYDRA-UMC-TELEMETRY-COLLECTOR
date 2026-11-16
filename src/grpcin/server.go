@@ -58,6 +58,8 @@ type Options struct {
 	ClientCAFile string
 	// AllowAnonymous allows a listener that is not on loopback with neither a token nor a client certificate.
 	AllowAnonymous bool
+	// AllowPlaintextToken allows the bearer token on a listener beyond loopback that has no TLS (its own switch: allowing an open listener does not allow it).
+	AllowPlaintextToken bool
 	// Submit takes a sample into the collector (collector.IngestSample).
 	Submit func(telemetry.Sample) error
 }
@@ -82,8 +84,8 @@ func (o Options) Problem() string {
 	if !IsLoopbackAddr(o.Addr) && o.Token == "" && o.ClientCAFile == "" && !o.AllowAnonymous {
 		return "refusing to listen for gRPC on " + o.Addr + " without a token or a client certificate: set -grpc-token-file or -grpc-client-ca, or pass -grpc-allow-anonymous to open it"
 	}
-	if o.Token != "" && o.CertFile == "" && !IsLoopbackAddr(o.Addr) && !o.AllowAnonymous {
-		return "refusing to send a bearer token in clear text to " + o.Addr + ": set -grpc-tls-cert and -grpc-tls-key, or listen on loopback"
+	if o.Token != "" && o.CertFile == "" && !IsLoopbackAddr(o.Addr) && !o.AllowPlaintextToken {
+		return "refusing to send a bearer token in clear text to " + o.Addr + ": set -grpc-tls-cert and -grpc-tls-key, listen on loopback, or pass -grpc-allow-plaintext-token"
 	}
 	return ""
 }

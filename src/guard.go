@@ -110,6 +110,22 @@ func isLoopbackAddr(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// datalakeProblem returns why the datalake address and token must not be used together, or "" when they are fine: a token sent over plain http to a
+// host that is not this machine travels in the clear unless the operator says so on purpose.
+func datalakeProblem(rawURL, token string, allowPlaintext bool) string {
+	if rawURL == "" || token == "" || allowPlaintext {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	if strings.EqualFold(u.Scheme, "http") && !isLoopbackAddr(u.Host) {
+		return "refusing to send the datalake token over plain http to " + u.Host + ": use https or pass -datalake-allow-plaintext"
+	}
+	return ""
+}
+
 // startupProblem returns why the collector must not start with this
 // configuration, or "" when it is fine.
 func startupProblem(addr, token string, allowAnonymous bool) string {
