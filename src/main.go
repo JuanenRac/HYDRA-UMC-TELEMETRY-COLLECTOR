@@ -326,7 +326,11 @@ func main() {
 				fmt.Fprintln(os.Stderr, "[telemetry-collector] cannot read the MQTT password file: "+err.Error())
 				os.Exit(2)
 			}
-			password = strings.TrimSpace(string(raw))
+			password = strings.TrimSpace(strings.TrimPrefix(string(raw), "\ufeff"))
+			if strings.ContainsRune(password, 0) {
+				fmt.Fprintln(os.Stderr, "[telemetry-collector] the MQTT password file is not UTF-8 text")
+				os.Exit(2)
+			}
 		}
 		adapter := &mqttin.Adapter{Submit: c.IngestSample, MaxAge: *mqttMaxAge}
 		var topics []string

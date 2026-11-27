@@ -113,8 +113,11 @@ func ReadToken(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	line, _, _ := strings.Cut(string(raw), "\n")
+	line, _, _ := strings.Cut(strings.TrimPrefix(string(raw), "\ufeff"), "\n")
 	token := strings.TrimSpace(line)
+	if strings.ContainsRune(token, 0) {
+		return "", errors.New("the token file is not UTF-8 text")
+	}
 	if token == "" {
 		return "", errors.New("the token file is empty")
 	}

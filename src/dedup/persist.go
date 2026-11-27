@@ -58,6 +58,12 @@ func (t *Tracker) Save(path string) error {
 		os.Remove(name)
 		return err
 	}
+	// the data reaches the disk before the name does, or a power cut can leave an empty file in place of the previous one
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(name)
 		return err
