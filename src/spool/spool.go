@@ -68,7 +68,8 @@ func Open(path string, maxBytes int64) (*File, error) {
 	// A crash can leave a half-written last line: cut the file back to the last complete line.
 	if i := bytes.LastIndexByte(data, '\n'); i < len(data)-1 {
 		data = data[:i+1]
-		if err := os.WriteFile(path, data, 0o640); err != nil {
+		// cut in place: rewriting the whole file would lose all of it if the machine stopped again while writing
+		if err := os.Truncate(path, int64(len(data))); err != nil {
 			return nil, fmt.Errorf("spool: %w", err)
 		}
 	}
@@ -108,6 +109,7 @@ func (f *File) Append(samples []telemetry.Sample) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.resyncLocked()
 	if f.size-f.read+int64(buf.Len()) > f.maxBytes {
 		return ErrFull
 	}
@@ -127,11 +129,36 @@ func (f *File) Append(samples []telemetry.Sample) error {
 	return nil
 }
 
+// resyncLocked follows a spool file that was removed or cut outside this process: the offsets kept here would point past its end and
+// nothing would be delivered again. What is left is replayed from its start (delivery is at least once) up to its last complete line.
+func (f *File) resyncLocked() {
+	if f.size == 0 {
+		return
+	}
+	info, err := os.Stat(f.path)
+	if err == nil && info.Size() >= f.size {
+		return
+	}
+	var data []byte
+	if err == nil {
+		data, err = os.ReadFile(f.path)
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return // not readable now: try again at the next call
+	}
+	whole := bytes.LastIndexByte(data, '\n') + 1
+	if whole < len(data) && os.Truncate(f.path, int64(whole)) != nil {
+		return
+	}
+	f.size, f.read, f.pending = int64(whole), 0, bytes.Count(data[:whole], []byte{'\n'})
+}
+
 // Next returns up to max undelivered samples, oldest first, without removing them. A line that
 // is not a valid sample (a damaged file) is skipped and counted as delivered by Ack.
 func (f *File) Next(max int) ([]Entry, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.resyncLocked()
 	if max <= 0 || f.read >= f.size {
 		return nil, nil
 	}

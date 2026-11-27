@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"sync/atomic"
@@ -108,10 +109,15 @@ func Load(path string) (*Table, error) {
 // Parse reads and checks the contract bytes. An unknown field is refused, like the closed schema does.
 func Parse(raw []byte) (*Table, error) {
 	var doc document
+	raw = bytes.TrimPrefix(raw, []byte("\ufeff")) // an editor of Windows
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("not a CanIds document: %w", err)
+	}
+	// the decoder stops at the end of the first value: a damaged or concatenated file would pass for the part that is whole
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("not a CanIds document: there is content after the document")
 	}
 	if doc.SchemaVersion != "1.0" {
 		return nil, errors.New("schema_version must be 1.0")
