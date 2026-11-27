@@ -92,6 +92,7 @@ func main() {
 	grpcCert := flag.String("grpc-tls-cert", "", "PEM certificate that turns TLS on for the gRPC ingest (with -grpc-tls-key)")
 	grpcKey := flag.String("grpc-tls-key", "", "PEM private key of -grpc-tls-cert")
 	grpcClientCA := flag.String("grpc-client-ca", "", "PEM authority that must have signed the certificate of a gRPC caller (mutual TLS; needs -grpc-tls-cert)")
+	grpcBindSource := flag.Bool("grpc-bind-source-to-cn", false, "with -grpc-client-ca, accept a sample only when its source id is the common name of the caller's certificate (or starts with that name and a colon); off by default")
 	grpcAnonymous := flag.Bool("grpc-allow-anonymous", false, "allow a gRPC listener beyond loopback with no token and no client certificate")
 	grpcPlainToken := flag.Bool("grpc-allow-plaintext-token", false, "allow the gRPC bearer token over a connection without TLS beyond loopback")
 	canSequence := flag.Bool("can-sequence", true, "give every CAN frame decoded here a growing sequence number, so two frames of one signal that arrive in the same millisecond keep distinct identities in the datalake (false sends none, as before)")
@@ -157,7 +158,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	grpcOptions := grpcin.Options{Addr: *grpcAddr, CertFile: *grpcCert, KeyFile: *grpcKey, ClientCAFile: *grpcClientCA, AllowAnonymous: *grpcAnonymous, AllowPlaintextToken: *grpcPlainToken}
+	grpcOptions := grpcin.Options{Addr: *grpcAddr, CertFile: *grpcCert, KeyFile: *grpcKey, ClientCAFile: *grpcClientCA, AllowAnonymous: *grpcAnonymous, AllowPlaintextToken: *grpcPlainToken, BindSourceToCN: *grpcBindSource}
 	if *grpcAddr != "" && *grpcTokenFile != "" {
 		token, err := grpcin.ReadToken(*grpcTokenFile)
 		if err != nil {
@@ -166,7 +167,7 @@ func main() {
 		}
 		grpcOptions.Token = token
 	}
-	if *grpcAddr == "" && (*grpcTokenFile != "" || *grpcCert != "" || *grpcKey != "" || *grpcClientCA != "") {
+	if *grpcAddr == "" && (*grpcTokenFile != "" || *grpcCert != "" || *grpcKey != "" || *grpcClientCA != "" || *grpcBindSource) {
 		fmt.Fprintln(os.Stderr, "[telemetry-collector] the -grpc-* options need -grpc-addr (the gRPC ingest is off without it)")
 		os.Exit(2)
 	}
