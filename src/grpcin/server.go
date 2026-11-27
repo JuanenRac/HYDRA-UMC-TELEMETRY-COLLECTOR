@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/JuanenRac/HYDRA-UMC-TELEMETRY-COLLECTOR/collector"
@@ -60,6 +61,9 @@ type Options struct {
 	AllowAnonymous bool
 	// AllowPlaintextToken allows the bearer token on a listener beyond loopback that has no TLS (its own switch: allowing an open listener does not allow it).
 	AllowPlaintextToken bool
+	// BindSourceToCN accepts a sample only when its source id is the common name of the verified client certificate, or starts with
+	// that name and a colon. It needs ClientCAFile. Off by default.
+	BindSourceToCN bool
 	// Submit takes a sample into the collector (collector.IngestSample).
 	Submit func(telemetry.Sample) error
 }
@@ -77,6 +81,9 @@ func (o Options) Problem() string {
 	}
 	if o.ClientCAFile != "" && o.CertFile == "" {
 		return "-grpc-client-ca needs -grpc-tls-cert and -grpc-tls-key (mutual TLS is a TLS listener that asks for a client certificate)"
+	}
+	if o.BindSourceToCN && o.ClientCAFile == "" {
+		return "-grpc-bind-source-to-cn needs -grpc-client-ca: without a client certificate there is no name to bind to"
 	}
 	if o.Submit == nil {
 		return "the gRPC input has nowhere to put the samples"
@@ -129,6 +136,8 @@ type Counters struct {
 	Accepted     uint64 `json:"accepted"`
 	Rejected     uint64 `json:"rejected"`
 	Unauthorized uint64 `json:"unauthorized"`
+	// RejectedSource counts the samples refused because they named a source their certificate does not (BindSourceToCN).
+	RejectedSource uint64 `json:"rejected_source"`
 }
 
 // Server is the TelemetryIngest service.
@@ -138,6 +147,7 @@ type Server struct {
 	accepted     atomic.Uint64
 	rejected     atomic.Uint64
 	unauthorized atomic.Uint64
+	rejectedSrc  atomic.Uint64
 	grpc         *grpc.Server
 }
 
@@ -188,7 +198,7 @@ func (s *Server) GracefulStop() { s.grpc.GracefulStop() }
 
 // Stats returns the totals.
 func (s *Server) Stats() Counters {
-	return Counters{Accepted: s.accepted.Load(), Rejected: s.rejected.Load(), Unauthorized: s.unauthorized.Load()}
+	return Counters{Accepted: s.accepted.Load(), Rejected: s.rejected.Load(), Unauthorized: s.unauthorized.Load(), RejectedSource: s.rejectedSrc.Load()}
 }
 
 func (s *Server) authorized(ctx context.Context) error {
@@ -234,7 +244,32 @@ func toSample(m *pb.Sample) (telemetry.Sample, error) {
 	return telemetry.Sample{SourceID: m.SourceId, Kind: m.Kind, Timestamp: m.TimestampMs, Fields: fields, Sequence: m.Sequence}, nil
 }
 
-func (s *Server) submit(m *pb.Sample) error {
+// errForeignSource refuses a sample in the name of another source than the certificate of the caller.
+var errForeignSource = errors.New("the source id is not the name of the client certificate")
+
+// sourceAllowed applies BindSourceToCN: the source is the common name of the verified certificate, or that name, a colon and more.
+func (s *Server) sourceAllowed(ctx context.Context, source string) bool {
+	if !s.opts.BindSourceToCN {
+		return true
+	}
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return false
+	}
+	info, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok || len(info.State.VerifiedChains) == 0 || len(info.State.VerifiedChains[0]) == 0 {
+		return false
+	}
+	name := info.State.VerifiedChains[0][0].Subject.CommonName
+	return name != "" && (source == name || strings.HasPrefix(source, name+":"))
+}
+
+func (s *Server) submit(ctx context.Context, m *pb.Sample) error {
+	if m != nil && !s.sourceAllowed(ctx, m.SourceId) {
+		s.rejected.Add(1)
+		s.rejectedSrc.Add(1)
+		return errForeignSource
+	}
 	sample, err := toSample(m)
 	if err == nil {
 		err = s.opts.Submit(sample)
@@ -253,8 +288,8 @@ func (s *Server) submit(m *pb.Sample) error {
 }
 
 // Push takes one sample; one the collector refuses is INVALID_ARGUMENT (or UNAVAILABLE when the buffer is full).
-func (s *Server) Push(_ context.Context, m *pb.Sample) (*pb.PushAck, error) {
-	if err := s.submit(m); err != nil {
+func (s *Server) Push(ctx context.Context, m *pb.Sample) (*pb.PushAck, error) {
+	if err := s.submit(ctx, m); err != nil {
 		return nil, status.Error(codeFor(err), err.Error())
 	}
 	return &pb.PushAck{Accepted: 1}, nil
@@ -276,7 +311,7 @@ func (s *Server) PushStream(stream pb.TelemetryIngest_PushStreamServer) error {
 		if seen > MaxStreamSamples {
 			return status.Errorf(codes.ResourceExhausted, "a stream carries at most %d samples", MaxStreamSamples)
 		}
-		if err := s.submit(m); err != nil {
+		if err := s.submit(stream.Context(), m); err != nil {
 			ack.Rejected++
 			if ack.FirstError == "" {
 				ack.FirstError = err.Error()
@@ -289,6 +324,9 @@ func (s *Server) PushStream(stream pb.TelemetryIngest_PushStreamServer) error {
 
 // codeFor maps a refusal to a status: a bad sample is the caller's fault, anything else (a full buffer) is a reason to try again.
 func codeFor(err error) codes.Code {
+	if errors.Is(err, errForeignSource) {
+		return codes.PermissionDenied
+	}
 	if errors.Is(err, telemetry.ErrMissingSourceID) || errors.Is(err, telemetry.ErrInvalidSourceID) || errors.Is(err, telemetry.ErrMissingKind) ||
 		errors.Is(err, telemetry.ErrInvalidTimestamp) || errors.Is(err, telemetry.ErrImplausibleTimestamp) || errors.Is(err, telemetry.ErrInvalidField) ||
 		strings.HasPrefix(err.Error(), "a sample carries") || err.Error() == "empty sample" {
