@@ -11,4 +11,4 @@
 package main
 
 // Version is the current release of HYDRA-UMC-TELEMETRY-COLLECTOR.
-const Version = "0.2.3"
+const Version = "0.2.4"

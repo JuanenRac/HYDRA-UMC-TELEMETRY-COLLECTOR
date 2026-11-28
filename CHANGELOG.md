@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.2.4] - Safer tokens in transit and source identity binding
 
 - **With mutual TLS a client can be tied to its own source id:** `-grpc-bind-source-to-cn` (off by default) accepts a sample only when `source_id` is the common name of the verified client certificate or starts with it and a colon; anything else is `PERMISSION_DENIED` and counted in `grpc.rejected_source`. Tests with certificates made in the test.
 - **Damaged files and other encodings:** the identity key, gRPC token and MQTT password files and the `CanIds` contract may carry the byte order mark of an editor of Windows (UTF-16 secrets are refused); a contract file with content after the document is refused instead of loading the part that is whole; a disk spool removed or cut while the collector runs no longer stops delivery for good; a torn last line is cut in place, and the deduplication window reaches the disk before it replaces the previous file. Tests added.
